@@ -34,7 +34,8 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Core Configuration
-const APP_URL = (process.env.APP_URL || 'https://streamixph05-pinomaxstreamv12026.hf.space').replace(/\/+$/, '');
+//const APP_URL = (process.env.APP_URL || 'https://streamixph05-pinomaxstreamv12026.hf.space').replace(/\/+$/, '');///
+const APP_URL = (process.env.APP_URL || 'https://movie-production-57b9.up.railway.app').replace(/\/+$/, '');
 const WORKER_URL = "https://pinomax-cache.roderickalmaras05.workers.dev";
 const API_ID = parseInt(process.env.API_ID || '0', 10);
 const API_HASH = (process.env.API_HASH || '').trim();
