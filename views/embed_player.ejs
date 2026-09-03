@@ -1,0 +1,885 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title><%= typeof title !== 'undefined' ? title : 'Pinomax Player' %></title>
+  
+  <!-- HLS.js & Artplayer -->
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+  <script src="https://cdn.jsdelivr.net/npm/artplayer/dist/artplayer.js"></script>
+
+  <style>
+    * { 
+      box-sizing: border-box; 
+      margin: 0; 
+      padding: 0; 
+      user-select: none; 
+      -webkit-tap-highlight-color: transparent; 
+    }
+    
+    /* 🟢 100% TRUE FULLSCREEN CONTAINER FIX FOR WEBVIEW & IFRAMES */
+    html, body {
+      width: 100vw;
+      height: 100vh;
+      height: 100dvh;
+      background: #000;
+      overflow: hidden;
+      position: fixed;
+      inset: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+    
+    #artplayer {
+      width: 100% !important;
+      height: 100% !important;
+      position: absolute !important;
+      inset: 0 !important;
+      background: #000;
+    }
+
+    .artplayer video {
+      object-fit: contain;
+      width: 100% !important;
+      height: 100% !important;
+    }
+
+    /* Itago ang default Artplayer UI elements */
+    .artplayer .art-bottom,
+    .art-video-player .art-bottom,
+    .art-controls,
+    .art-state-lock,
+    .art-layer-auto-playback { 
+      display: none !important; 
+    }
+
+    /* Subtitle Styling */
+    .art-video-player .art-subtitle {
+      color: #ffffff !important;
+      font-size: 17px !important;
+      font-weight: 700 !important;
+      text-shadow: 0 2px 4px rgba(0,0,0,0.9), 0 -2px 4px rgba(0,0,0,0.9), 2px 0 4px rgba(0,0,0,0.9), -2px 0 4px rgba(0,0,0,0.9) !important;
+      bottom: 50px !important;
+      transition: all 0.2s ease;
+    }
+
+    /* 🟢 CUSTOM OVERLAY LAYER (Pinned sa Pinakailalim ng Device) */
+    .custom-ui-layer {
+      position: absolute !important;
+      inset: 0 !important;
+      width: 100% !important;
+      height: 100% !important;
+      z-index: 50;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: env(safe-area-inset-top, 10px) env(safe-area-inset-right, 14px) env(safe-area-inset-bottom, 8px) env(safe-area-inset-left, 14px);
+      background: linear-gradient(180deg, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0) 25%, rgba(0,0,0,0) 65%, rgba(0,0,0,0.9) 100%);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .custom-ui-layer.show-ui {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    /* 🟢 TOP LEFT TITLE BADGE */
+    .ui-top {
+      display: flex;
+      justify-content: flex-start;
+      align-items: center;
+      width: 100%;
+      padding-top: 4px;
+    }
+    .top-badge-title {
+      font-size: 10.5px;
+      font-weight: 600;
+      color: #f1f1f1;
+      background: rgba(15, 17, 23, 0.8);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      padding: 5px 12px;
+      border-radius: 20px;
+      letter-spacing: 0.3px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      max-width: 85%;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.6);
+    }
+    .top-badge-title .dot {
+      width: 6px; 
+      height: 6px; 
+      background: #e50914; 
+      border-radius: 50%; 
+      display: inline-block;
+      box-shadow: 0 0 6px #e50914;
+      flex-shrink: 0;
+    }
+    .top-badge-title .text-title {
+      white-space: nowrap; 
+      overflow: hidden; 
+      text-overflow: ellipsis;
+    }
+
+    /* 🟢 SKIP INTRO BUTTON */
+    .btn-skip-intro {
+      display: none;
+      position: absolute;
+      right: 18px;
+      bottom: 55px;
+      z-index: 70;
+      background: rgba(18, 20, 29, 0.85);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      color: #fff;
+      font-size: 11.5px;
+      font-weight: 700;
+      padding: 6px 14px;
+      border-radius: 20px;
+      cursor: pointer;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.6);
+      transition: transform 0.15s ease, background 0.15s ease;
+      letter-spacing: 0.4px;
+    }
+    .btn-skip-intro:active {
+      transform: scale(0.92);
+      background: #e50914;
+    }
+
+    /* 🟢 LOCK BUTTON (Left Edge) */
+    .btn-lock-screen {
+      position: absolute;
+      left: 16px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 38px;
+      height: 38px;
+      border-radius: 50%;
+      background: rgba(18, 20, 29, 0.75);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: transform 0.15s;
+      z-index: 60;
+    }
+    .btn-lock-screen:active { transform: translateY(-50%) scale(0.9); }
+    .btn-lock-screen svg { width: 17px; height: 17px; fill: #fff; }
+
+    /* FLOATING UNLOCK BUTTON */
+    #floatingUnlockBtn {
+      display: none;
+      position: absolute;
+      top: 16px;
+      left: 16px;
+      z-index: 100;
+      width: 38px;
+      height: 38px;
+      border-radius: 50%;
+      background: #e50914;
+      border: 1.5px solid #fff;
+      color: #fff;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      box-shadow: 0 0 15px rgba(229, 9, 20, 0.8);
+      animation: popIn 0.2s ease;
+    }
+    #floatingUnlockBtn svg { width: 17px; height: 17px; fill: #fff; }
+
+    /* 🟢 BOTTOM BAR & TIMELINE (Lapat sa pinakababa) */
+    .ui-bottom {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      width: 100%;
+      margin-bottom: 2px;
+    }
+
+    /* SCRUBBER PROGRESS BAR */
+    .progress-bar-container {
+      width: 100%;
+      height: 18px;
+      display: flex;
+      align-items: center;
+      cursor: pointer;
+      position: relative;
+    }
+    .progress-bg {
+      width: 100%;
+      height: 3.5px;
+      background: rgba(255, 255, 255, 0.25);
+      border-radius: 2px;
+      position: relative;
+      transition: height 0.15s ease;
+    }
+    .progress-bar-container:hover .progress-bg,
+    .progress-bar-container:active .progress-bg { 
+      height: 5.5px; 
+    }
+    .progress-buffered {
+      height: 100%;
+      background: rgba(255, 255, 255, 0.45);
+      border-radius: 2px;
+      position: absolute;
+      left: 0; top: 0; width: 0%;
+    }
+    .progress-filled {
+      height: 100%;
+      background: #e50914;
+      border-radius: 2px;
+      position: absolute;
+      left: 0; top: 0; width: 0%;
+      box-shadow: 0 0 6px rgba(229, 9, 20, 0.8);
+    }
+    .progress-thumb {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #fff;
+      position: absolute;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      left: 0%;
+      box-shadow: 0 0 5px rgba(0,0,0,0.9);
+      transition: transform 0.1s;
+    }
+    .progress-bar-container:hover .progress-thumb { transform: translate(-50%, -50%) scale(1.2); }
+
+    /* BOTTOM CONTROLS ROW */
+    .bottom-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 2px;
+      height: 34px;
+    }
+    .bottom-left, .bottom-right {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .btn-icon-ctl {
+      background: none;
+      border: none;
+      color: #fff;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      position: relative;
+      transition: transform 0.12s, background 0.12s;
+    }
+    .btn-icon-ctl:active { transform: scale(0.85); background: rgba(255,255,255,0.15); }
+    .btn-icon-ctl svg { width: 19px; height: 19px; fill: currentColor; }
+
+    .time-label {
+      font-size: 11.5px;
+      font-weight: 600;
+      color: #e0e0e0;
+      letter-spacing: 0.4px;
+      font-variant-numeric: tabular-nums;
+      margin-left: 2px;
+    }
+
+    @keyframes popIn {
+      from { transform: scale(0.8); opacity: 0; }
+      to { transform: scale(1); opacity: 1; }
+    }
+  </style>
+</head>
+<body>
+
+  <div id="artplayer"></div>
+  <input type="file" id="subFileInput" accept=".vtt,.srt" style="display:none;" />
+
+  <!-- UNLOCK BUTTON -->
+  <div id="floatingUnlockBtn" title="Unlock Screen">
+    <svg viewBox="0 0 24 24"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg>
+  </div>
+
+  <!-- SKIP INTRO BUTTON -->
+  <div id="btnSkipIntro" class="btn-skip-intro">Skip Intro ➔</div>
+
+  <!-- OVERLAY LAYER -->
+  <div class="custom-ui-layer show-ui" id="customUiLayer">
+    
+    <!-- 🟢 TOP LEFT TITLE BADGE -->
+    <div class="ui-top">
+      <div class="top-badge-title">
+        <span class="dot"></span>
+        <span class="text-title" id="playerTitleDisplay"><%= typeof title !== 'undefined' && title ? title : 'Pinomax Video' %></span>
+      </div>
+    </div>
+
+    <!-- 🟢 LOCK SCREEN BUTTON -->
+    <div class="btn-lock-screen" id="btnLockControls" title="Lock Screen">
+      <svg viewBox="0 0 24 24"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6h1.9c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm0 12H6V10h12v10z"/></svg>
+    </div>
+
+    <!-- 🟢 BOTTOM CONTROLS & TIMELINE -->
+    <div class="ui-bottom">
+      <div class="progress-bar-container" id="customProgressBar">
+        <div class="progress-bg">
+          <div class="progress-buffered" id="customProgressBuf"></div>
+          <div class="progress-filled" id="customProgressFill"></div>
+          <div class="progress-thumb" id="customProgressThumb"></div>
+        </div>
+      </div>
+
+      <div class="bottom-row">
+        <!-- Kaliwa: Play, Volume, Oras -->
+        <div class="bottom-left">
+          <button class="btn-icon-ctl" id="btnMiniPlay" title="Play/Pause">
+            <svg id="iconMiniPause" viewBox="0 0 24 24" style="display:none;"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+            <svg id="iconMiniPlay" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+          </button>
+          
+          <button class="btn-icon-ctl" id="btnCustomVolume" title="Mute/Unmute">
+            <svg id="iconVolHigh" viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
+            <svg id="iconVolMute" viewBox="0 0 24 24" style="display:none;"><path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/></svg>
+          </button>
+          
+          <div class="time-label" id="customTimeDisplay">00:00 / 00:00</div>
+        </div>
+
+        <!-- Kanan: -10s, +10s, Settings, Fullscreen -->
+        <div class="bottom-right">
+          <!-- 10s Rewind -->
+          <button class="btn-icon-ctl" id="btnCustomRewind" title="Rewind 10s">
+            <svg viewBox="0 0 24 24">
+              <path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8zm-1.1 11h-.85v-3.26l-1.01.32v-.59l1.8-.63h.06V16zm4.29-1.93c0 .32-.05.6-.16.84-.11.24-.26.43-.46.57-.2.14-.43.24-.7.29-.27.05-.56.08-.88.08s-.6-.03-.87-.08c-.27-.05-.5-.15-.69-.29-.2-.14-.35-.33-.46-.57-.11-.24-.17-.52-.17-.84v-1.28c0-.32.06-.6.17-.84.11-.24.26-.43.46-.57.2-.14.42-.24.69-.29.27-.05.56-.08.87-.08s.61.03.88.08c.27.05.5.15.7.29.2.14.35.33.46.57.11.24.16.52.16.84v1.28zm-.87-1.39c0-.2-.03-.37-.08-.5-.06-.14-.13-.24-.23-.31-.1-.07-.21-.1-.35-.1s-.26.04-.35.11c-.1.07-.17.17-.23.31-.05.14-.08.31-.08.52v1.51c0 .2.03.37.08.51.05.14.13.24.23.31.1.07.21.11.35.11s.25-.04.35-.11c.1-.07.18-.17.23-.31.05-.14.08-.31.08-.51v-1.52z"/>
+            </svg>
+          </button>
+
+          <!-- 10s Forward -->
+          <button class="btn-icon-ctl" id="btnCustomForward" title="Forward 10s">
+            <svg viewBox="0 0 24 24">
+              <path d="M12 5V1l5 5-5 5V7c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6h2c0 4.42-3.58 8-8 8s-8-3.58-8-8 3.58-8 8-8zm-1.1 11h-.85v-3.26l-1.01.32v-.59l1.8-.63h.06V16zm4.29-1.93c0 .32-.05.6-.16.84-.11.24-.26.43-.46.57-.2.14-.43.24-.7.29-.27.05-.56.08-.88.08s-.6-.03-.87-.08c-.27-.05-.5-.15-.69-.29-.2-.14-.35-.33-.46-.57-.11-.24-.17-.52-.17-.84v-1.28c0-.32.06-.6.17-.84.11-.24.26-.43.46-.57.2-.14.42-.24.69-.29.27-.05.56-.08.87-.08s.61.03.88.08c.27.05.5.15.7.29.2.14.35.33.46.57.11.24.16.52.16.84v1.28zm-.87-1.39c0-.2-.03-.37-.08-.5-.06-.14-.13-.24-.23-.31-.1-.07-.21-.1-.35-.1s-.26.04-.35.11c-.1.07-.17.17-.23.31-.05.14-.08.31-.08.52v1.51c0 .2.03.37.08.51.05.14.13.24.23.31.1.07.21.11.35.11s.25-.04.35-.11c.1-.07.18-.17.23-.31.05-.14.08-.31.08-.51v-1.52z"/>
+            </svg>
+          </button>
+
+          <!-- Settings Gear -->
+          <button class="btn-icon-ctl" id="btnCustomSettings" title="Settings">
+            <svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
+          </button>
+
+          <!-- Fullscreen Toggle -->
+          <button class="btn-icon-ctl" id="btnCustomFullscreen" title="Fullscreen">
+            <svg id="iconEnterFs" viewBox="0 0 24 24"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>
+            <svg id="iconExitFs" viewBox="0 0 24 24" style="display:none;"><path d="M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z"/></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // 🟢 DOM References
+    const uiLayer = document.getElementById('customUiLayer');
+    const floatingUnlockBtn = document.getElementById('floatingUnlockBtn');
+    const btnSkipIntro = document.getElementById('btnSkipIntro');
+    const playerTitleDisplay = document.getElementById('playerTitleDisplay');
+    const btnLock = document.getElementById('btnLockControls');
+    const btnRewind = document.getElementById('btnCustomRewind');
+    const btnForward = document.getElementById('btnCustomForward');
+    const btnMiniPlay = document.getElementById('btnMiniPlay');
+    const iconMiniPlay = document.getElementById('iconMiniPlay');
+    const iconMiniPause = document.getElementById('iconMiniPause');
+    const timeDisplay = document.getElementById('customTimeDisplay');
+    const progressFill = document.getElementById('customProgressFill');
+    const progressThumb = document.getElementById('customProgressThumb');
+    const progressBuf = document.getElementById('customProgressBuf');
+    const progressBar = document.getElementById('customProgressBar');
+    const btnVol = document.getElementById('btnCustomVolume');
+    const iconVolHigh = document.getElementById('iconVolHigh');
+    const iconVolMute = document.getElementById('iconVolMute');
+    const btnSettings = document.getElementById('btnCustomSettings');
+    const btnFullscreen = document.getElementById('btnCustomFullscreen');
+    const iconEnterFs = document.getElementById('iconEnterFs');
+    const iconExitFs = document.getElementById('iconExitFs');
+    const subFileInput = document.getElementById('subFileInput');
+
+    let isScreenLocked = false;
+    let hideTimeout = null;
+    let currentSubtitleUrl = '';
+
+    const streamUrl = "<%= streamUrl %>";
+    const movieTitle = "<%= typeof title !== 'undefined' && title ? title : 'Pinomax Video' %>";
+    
+    
+    // 🟢 100% Naka-connect na agad sa public/intro.mp4 mo
+    const introUrl = '/intro.mp4'; 
+    let isIntroPlaying = Boolean(introUrl);
+    
+    let baseDlUrl = "<%= typeof downloadUrl !== 'undefined' ? downloadUrl : streamUrl %>";
+    if (baseDlUrl.includes('/stream/')) {
+      baseDlUrl = baseDlUrl.replace('/stream/', '/download/');
+    }
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const isVipUser = urlParams.get('vip') === '1';
+    const searchTarget = urlParams.get('tmdb_id') || urlParams.get('tmdb') || movieTitle;
+
+    function checkVipAccess(actionName) {
+      if (!isVipUser) {
+        if (confirm('👑 VIP FEATURE ONLY!\nAng ' + actionName + ' ay para lamang sa VIP Members.\nGusto mo bang mag-upgrade sa VIP ngayon?')) {
+          if (window.top) window.top.location.href = 'vip.php';
+          else window.location.href = 'vip.php';
+        }
+        return false;
+      }
+      return true;
+    }
+
+    function formatTime(seconds) {
+      if (isNaN(seconds) || seconds < 0) return '00:00';
+      const s = Math.floor(seconds);
+      const h = Math.floor(s / 3600);
+      const m = Math.floor((s % 3600) / 60);
+      const remS = s % 60;
+      const mm = m < 10 ? '0' + m : m;
+      const ss = remS < 10 ? '0' + remS : remS;
+      if (h > 0) {
+        const hh = h < 10 ? '0' + h : h;
+        return hh + ':' + mm + ':' + ss;
+      }
+      return mm + ':' + ss;
+    }
+
+    function showControls() {
+      if (isScreenLocked || !uiLayer) return;
+      uiLayer.classList.add('show-ui');
+      clearTimeout(hideTimeout);
+      if (art && art.playing) {
+        hideTimeout = setTimeout(() => {
+          uiLayer.classList.remove('show-ui');
+        }, 3500);
+      }
+    }
+
+    function setPlayState(isPlaying) {
+      if (isPlaying) {
+        if (iconMiniPlay) iconMiniPlay.style.display = 'none';
+        if (iconMiniPause) iconMiniPause.style.display = 'block';
+      } else {
+        if (iconMiniPlay) iconMiniPlay.style.display = 'block';
+        if (iconMiniPause) iconMiniPause.style.display = 'none';
+      }
+    }
+
+    function updateSubtitleStyle(prop, val) {
+      const sub = document.querySelector('.art-video-player .art-subtitle');
+      if (sub) sub.style[prop] = val;
+    }
+
+    // 🟢 INITIALIZE ARTPLAYER
+    const art = new Artplayer({
+      container: '#artplayer',
+      url: isIntroPlaying ? introUrl : streamUrl,
+      type: 'mp4',
+      title: '',
+      poster: '<%= typeof poster !== 'undefined' ? poster : "" %>',
+      theme: '#E50914',
+      volume: 0.8,
+      isLive: false,
+      muted: false,
+      autoplay: true,
+      pip: true,
+      autoSize: true,
+      autoMini: true,
+      screenshot: true,
+      setting: true,
+      loop: false,
+      playbackRate: true,
+      aspectRatio: true,
+      fullscreen: false,
+      fullscreenWeb: false,
+      miniProgressBar: false,
+      lock: false,
+      fastForward: true,
+      autoPlayback: true,
+      airplay: true,
+
+      subtitle: {
+        url: '',
+        type: 'vtt',
+        style: {
+          color: '#ffffff',
+          fontSize: '17px',
+          fontWeight: 'bold',
+        },
+        encoding: 'utf-8',
+        bilingual: true,
+      },
+
+      customType: {
+        m3u8: function (video, url, artObj) {
+          if (window.Hls && Hls.isSupported()) {
+            if (artObj.hls) artObj.hls.destroy();
+            const hls = new Hls();
+            hls.loadSource(url);
+            hls.attachMedia(video);
+            artObj.hls = hls;
+            artObj.on('destroy', () => hls.destroy());
+          } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+            video.src = url;
+          }
+        }
+      },
+
+      settings: [
+        {
+          name: 'downloadMovie',
+          html: '📥 Download Movie (VIP)',
+          tooltip: isVipUser ? 'VIP Ready' : 'VIP Only',
+          onClick: function () {
+            if (!checkVipAccess('Download Movie')) return;
+            window.open(baseDlUrl + (baseDlUrl.includes('?') ? '&' : '?') + 'vip=1', '_blank');
+          },
+        },
+        {
+          name: 'downloadSub',
+          html: '💬 Download Subtitle (VIP)',
+          tooltip: isVipUser ? 'Download CC' : 'VIP Only',
+          onClick: function () {
+            if (!checkVipAccess('Download Subtitles')) return;
+            if (!currentSubtitleUrl || currentSubtitleUrl === 'import') {
+              alert('Walang aktibong subtitle na naka-load. Pumili muna sa listahan!');
+              return;
+            }
+            const a = document.createElement('a');
+            a.href = currentSubtitleUrl;
+            a.download = (searchTarget || 'subtitle') + '.vtt';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+          },
+        },
+        {
+          name: 'aspectRatio',
+          html: '🔲 Video Fit / Aspect Ratio',
+          width: 220,
+          selector: [
+            { default: true, html: 'Default (Fit)', value: 'default' },
+            { html: 'Stretch / Zoom to Fill', value: 'cover' },
+            { html: '16:9 Widescreen', value: '16:9' },
+            { html: '4:3 Standard', value: '4:3' }
+          ],
+          onSelect: function (item) {
+            if (item.value === 'cover') {
+              art.video.style.objectFit = 'cover';
+              art.aspectRatio = 'default';
+            } else if (item.value === 'default') {
+              art.video.style.objectFit = 'contain';
+              art.aspectRatio = 'default';
+            } else {
+              art.video.style.objectFit = 'contain';
+              art.aspectRatio = item.value;
+            }
+            return item.html;
+          }
+        },
+        {
+          name: 'subtitle',
+          html: '💬 CC Subtitles',
+          width: 260,
+          selector: [
+            { default: true, html: '❌ Cc Off', url: '' },
+            { html: '📁 Import File (.srt / .vtt)', url: 'import' }
+          ],
+          onSelect: function (item) {
+            currentSubtitleUrl = item.url;
+            if (item.url === 'import') {
+              subFileInput.click();
+            } else if (item.url) {
+              art.subtitle.switch(item.url, { name: item.html, type: 'vtt' });
+              art.subtitle.show = true;
+              art.notice.show = 'Subtitle: ' + item.html;
+            } else {
+              art.subtitle.show = false;
+              art.notice.show = 'Subtitles Off';
+            }
+            return item.html;
+          },
+        },
+        {
+          name: 'subSize',
+          html: '🔤 Subtitle Size',
+          width: 220,
+          selector: [
+            { html: 'Maliit (15px)', value: '15px' },
+            { default: true, html: 'Normal (17px)', value: '17px' },
+            { html: 'Malaki (22px)', value: '22px' }
+          ],
+          onSelect: function (item) {
+            updateSubtitleStyle('fontSize', item.value);
+            return item.html;
+          }
+        }
+      ],
+    });
+
+    function startMainMovie() {
+      if (!isIntroPlaying) return;
+      isIntroPlaying = false;
+      if (btnSkipIntro) btnSkipIntro.style.display = 'none';
+      if (playerTitleDisplay) playerTitleDisplay.innerText = movieTitle;
+
+      art.switchUrl(streamUrl).then(() => {
+        art.play();
+        art.notice.show = '🎬 Playing Movie...';
+      }).catch(() => {
+        art.url = streamUrl;
+        art.play();
+      });
+    }
+
+    art.on('ready', () => {
+      // 🟢 MOUNT DIRECTLY SA OUTERMOST CONTAINER PARA LAPAT SA ILALIM NG SCREEN
+      const targetContainer = document.getElementById('artplayer');
+      if (targetContainer) {
+        if (uiLayer) targetContainer.appendChild(uiLayer);
+        if (btnSkipIntro) targetContainer.appendChild(btnSkipIntro);
+      }
+
+      if (isIntroPlaying) {
+        if (btnSkipIntro) btnSkipIntro.style.display = 'block';
+        if (playerTitleDisplay) playerTitleDisplay.innerText = 'PINOMAX Intro...';
+      }
+
+      art.on('video:ended', () => {
+        if (isIntroPlaying) startMainMovie();
+      });
+
+      if (btnSkipIntro) {
+        btnSkipIntro.addEventListener('click', (e) => {
+          e.stopPropagation();
+          startMainMovie();
+        });
+      }
+
+      // Tap screen to toggle UI
+      if (targetContainer) {
+        targetContainer.addEventListener('click', (e) => {
+          if (isScreenLocked) return;
+          if (e.target.closest('button') || e.target.closest('.btn-skip-intro') || e.target.closest('.btn-lock-screen') || e.target.closest('.progress-bar-container') || e.target.closest('.art-setting-item')) return;
+          if (uiLayer.classList.contains('show-ui')) {
+            uiLayer.classList.remove('show-ui');
+          } else {
+            showControls();
+          }
+        });
+      }
+
+      const onPlaying = () => {
+        setPlayState(true);
+        showControls();
+      };
+      const onPaused = () => {
+        setPlayState(false);
+        if (uiLayer && !isScreenLocked) uiLayer.classList.add('show-ui');
+        clearTimeout(hideTimeout);
+      };
+
+      art.on('play', onPlaying);
+      art.on('video:playing', onPlaying);
+      art.on('pause', onPaused);
+      art.on('video:pause', onPaused);
+
+      // Lock Screen Toggle
+      btnLock.addEventListener('click', (e) => {
+        e.stopPropagation();
+        isScreenLocked = true;
+        uiLayer.classList.remove('show-ui');
+        if (btnSkipIntro) btnSkipIntro.style.display = 'none';
+        floatingUnlockBtn.style.display = 'flex';
+        art.notice.show = '🔒 Screen Locked';
+      });
+
+      floatingUnlockBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        isScreenLocked = false;
+        floatingUnlockBtn.style.display = 'none';
+        uiLayer.classList.add('show-ui');
+        if (isIntroPlaying && btnSkipIntro) btnSkipIntro.style.display = 'block';
+        art.notice.show = '🔓 Screen Unlocked';
+        showControls();
+      });
+
+      // 10s Rewind & Forward
+      btnRewind.addEventListener('click', (e) => {
+        e.stopPropagation();
+        art.currentTime = Math.max(0, art.currentTime - 10);
+        art.notice.show = '⏪ 10s';
+        showControls();
+      });
+
+      btnForward.addEventListener('click', (e) => {
+        e.stopPropagation();
+        art.currentTime = Math.min(art.duration || 0, art.currentTime + 10);
+        art.notice.show = '⏩ 10s';
+        showControls();
+      });
+
+      btnMiniPlay.addEventListener('click', (e) => {
+        e.stopPropagation();
+        art.toggle();
+      });
+
+      // Timeline update
+      art.on('video:timeupdate', () => {
+        const cur = art.currentTime || 0;
+        const dur = art.duration || 0;
+        const pct = dur > 0 ? (cur / dur) * 100 : 0;
+        if (progressFill) progressFill.style.width = pct + '%';
+        if (progressThumb) progressThumb.style.left = pct + '%';
+        if (timeDisplay) timeDisplay.innerText = formatTime(cur) + ' / ' + formatTime(dur);
+      });
+
+      art.on('video:progress', () => {
+        if (art.duration > 0 && art.video && art.video.buffered.length > 0) {
+          const bufEnd = art.video.buffered.end(art.video.buffered.length - 1);
+          if (progressBuf) progressBuf.style.width = (bufEnd / art.duration) * 100 + '%';
+        }
+      });
+
+      progressBar.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const rect = progressBar.getBoundingClientRect();
+        const clickPos = (e.clientX - rect.left) / rect.width;
+        if (art.duration) {
+          art.currentTime = Math.max(0, Math.min(art.duration, clickPos * art.duration));
+        }
+        showControls();
+      });
+
+      btnVol.addEventListener('click', (e) => {
+        e.stopPropagation();
+        art.muted = !art.muted;
+        if (iconVolHigh) iconVolHigh.style.display = art.muted ? 'none' : 'block';
+        if (iconVolMute) iconVolMute.style.display = art.muted ? 'block' : 'none';
+        showControls();
+      });
+
+      btnSettings.addEventListener('click', (e) => {
+        e.stopPropagation();
+        art.setting.show = true;
+      });
+
+      // 🟢 100% RELIABLE FULLSCREEN WITH NATIVE AUTO-ROTATE LANDSCAPE
+      async function toggleFullscreen() {
+        const isFs = document.fullscreenElement || document.webkitFullscreenElement || art.fullscreen;
+        
+        if (isFs) {
+          if (document.exitFullscreen) await document.exitFullscreen().catch(() => {});
+          else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+          
+          if (screen.orientation && screen.orientation.unlock) {
+            screen.orientation.unlock();
+          }
+          art.fullscreen = false;
+          iconEnterFs.style.display = 'block';
+          iconExitFs.style.display = 'none';
+        } else {
+          try {
+            const el = document.documentElement;
+            if (el.requestFullscreen) {
+              await el.requestFullscreen();
+            } else if (el.webkitRequestFullscreen) {
+              el.webkitRequestFullscreen();
+            } else if (art.video && art.video.webkitEnterFullscreen) {
+              art.video.webkitEnterFullscreen();
+            }
+
+            // Awtomatikong i-rotate sa pahalang (Landscape) sa Android phone
+            if (screen.orientation && screen.orientation.lock) {
+              await screen.orientation.lock('landscape').catch(() => {});
+            }
+          } catch (_) {
+            art.fullscreenWeb = true;
+          }
+          iconEnterFs.style.display = 'none';
+          iconExitFs.style.display = 'block';
+        }
+      }
+
+      btnFullscreen.addEventListener('click', (e) => {
+        e.stopPropagation();
+        toggleFullscreen();
+      });
+
+      document.addEventListener('fullscreenchange', () => {
+        const isFs = !!document.fullscreenElement;
+        iconEnterFs.style.display = isFs ? 'none' : 'block';
+        iconExitFs.style.display = isFs ? 'block' : 'none';
+      });
+    });
+
+    // Subtitle Fetching API
+    if (searchTarget && searchTarget !== 'Pinomax Video Player') {
+      fetch('/api/subtitles/' + encodeURIComponent(searchTarget))
+        .then(res => res.json())
+        .then(data => {
+          if (data.success && data.subtitles && data.subtitles.length > 0) {
+            art.setting.update({
+              name: 'subtitle',
+              width: 260,
+              html: '💬 CC (' + data.subtitles.length + ')',
+              selector: [
+                { default: true, html: '❌ Cc Off', url: '' },
+                ...data.subtitles.map(s => ({
+                  html: s.name,
+                  url: s.url
+                })),
+                { html: '📁 Import File (.srt / .vtt)', url: 'import' }
+              ],
+              onSelect: function (item) {
+                currentSubtitleUrl = item.url;
+                if (item.url === 'import') {
+                  subFileInput.click();
+                } else if (item.url) {
+                  art.subtitle.switch(item.url, { name: item.html, type: 'vtt' });
+                  art.subtitle.show = true;
+                  art.notice.show = 'Subtitle: ' + item.html;
+                } else {
+                  art.subtitle.show = false;
+                  art.notice.show = 'Subtitles Off';
+                }
+                return item.html;
+              }
+            });
+          }
+        }).catch(err => console.warn('Sub fetch error:', err));
+    }
+
+    subFileInput.addEventListener('change', function (e) {
+      const file = e.target.files[0];
+      if (file) {
+        const fileUrl = URL.createObjectURL(file);
+        currentSubtitleUrl = fileUrl;
+        const ext = file.name.split('.').pop().toLowerCase();
+        art.subtitle.switch(fileUrl, {
+          name: file.name,
+          type: ext === 'srt' ? 'srt' : 'vtt',
+        }).then(() => {
+          art.subtitle.show = true;
+          art.notice.show = 'Subtitle Loaded: ' + file.name;
+        });
+      }
+    });
+  </script>
+</body>
+</html>

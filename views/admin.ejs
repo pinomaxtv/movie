@@ -1,0 +1,1018 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-[#080808]">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title><%= pageTitle %></title>
+  <meta name="description" content="StreamPortal Admin - Firebase Realtime Database Content & Stream Manager">
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            bg: '#080808',
+            card: '#121212',
+            cardHover: '#171717',
+            border: '#262626',
+            accent: {
+              DEFAULT: '#e11d48',
+              hover: '#f43f5e',
+              glow: 'rgba(225, 29, 72, 0.25)',
+              dim: 'rgba(225, 29, 72, 0.1)'
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --bg: #080808;
+      --card: #121212;
+      --card-hover: #171717;
+      --border: #262626;
+      --border-hover: #3a3a3a;
+      --accent: #e11d48;
+      --text: #f5f5f5;
+      --text-dim: #a3a3a3;
+    }
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+    }
+    .bento-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      transition: all 0.2s ease-in-out;
+    }
+    .bento-card:hover {
+      border-color: var(--border-hover);
+    }
+    .bento-badge {
+      padding: 4px 8px;
+      border-radius: 6px;
+      background: #1a1a1a;
+      font-size: 11px;
+      color: #e5e5e5;
+      border: 1px solid var(--border);
+    }
+    .bento-input {
+      background: #181818;
+      border: 1px solid var(--border);
+      color: #f5f5f5;
+    }
+    .bento-input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 2px rgba(225, 29, 72, 0.2);
+    }
+    .accent-dot {
+      width: 6px;
+      height: 6px;
+      background: var(--accent);
+      border-radius: 50%;
+      box-shadow: 0 0 8px var(--accent);
+    }
+    .card-title-bento {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-dim);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+  </style>
+</head>
+<body class="bg-[#080808] text-[#f5f5f5] min-h-screen flex flex-col antialiased selection:bg-rose-600 selection:text-white">
+
+  <!-- Bento Navigation Bar -->
+  <header class="sticky top-0 z-40 border-b border-[#262626] bg-[#080808]/90 backdrop-blur-md">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
+      <a href="/" class="flex items-center gap-3 group">
+        <div class="w-9 h-9 rounded-xl bg-rose-600 flex items-center justify-center font-extrabold text-white text-sm shadow-[0_0_15px_rgba(225,29,72,0.4)] group-hover:scale-105 transition-transform">
+          SP
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="text-base font-extrabold tracking-tight text-white flex items-center">
+            STREAM<span class="text-rose-500">PORTAL</span>
+          </span>
+          <span class="bento-badge text-[10px] font-mono text-rose-400 border-rose-500/30">FIREBASE ADMIN</span>
+        </div>
+      </a>
+
+      <!-- Center Tabs -->
+      <nav class="hidden md:flex items-center gap-6 text-xs font-semibold tracking-wider text-zinc-400">
+        <a href="/" class="hover:text-white transition flex items-center gap-1">
+          <i data-lucide="layout-dashboard" class="w-3.5 h-3.5"></i> MAIN PORTAL
+        </a>
+        <a href="/admin" class="text-white flex items-center gap-1.5 font-bold">
+          <div class="accent-dot"></div> ADMIN CONSOLE
+        </a>
+        <a href="#database-inventory" class="hover:text-white transition flex items-center gap-1">
+          <i data-lucide="database" class="w-3.5 h-3.5"></i> INVENTORY (<%= items.length %>)
+        </a>
+      </nav>
+
+      <!-- Status Pills -->
+      <div class="flex items-center gap-3">
+        <div class="flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium bg-[#121212] text-emerald-400 border border-[#262626]" title="Firebase Realtime Database: Connected">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_8px_#22c55e] animate-pulse"></span>
+          <span class="font-mono text-[11px]">RTDB: LIVE</span>
+        </div>
+
+        <a href="/" class="px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-[#181818] hover:bg-zinc-800 text-zinc-200 border border-[#262626] transition flex items-center gap-1.5">
+          <i data-lucide="external-link" class="w-3.5 h-3.5 text-rose-500"></i>
+          View Portal
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Admin Container -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+
+    <!-- Flash Notifications -->
+    <% if (flashMessage) { %>
+      <div class="p-4 rounded-2xl <%= flashType === 'error' ? 'bg-rose-950/40 border-rose-600/40 text-rose-200' : 'bg-emerald-950/40 border-emerald-600/40 text-emerald-200' %> border text-sm flex items-center justify-between gap-3 animate-fade-in">
+        <div class="flex items-center gap-3">
+          <i data-lucide="<%= flashType === 'error' ? 'alert-circle' : 'check-circle-2' %>" class="w-5 h-5 flex-shrink-0 <%= flashType === 'error' ? 'text-rose-400' : 'text-emerald-400' %>"></i>
+          <span><%= flashMessage %></span>
+        </div>
+        <button onclick="this.parentElement.remove()" class="text-zinc-400 hover:text-white">✕</button>
+      </div>
+    <% } %>
+
+    <!-- Top Stats Row -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div class="bento-card p-5 space-y-2 bg-gradient-to-br from-[#141414] to-[#0c0c0c]">
+        <div class="card-title-bento text-rose-400"><div class="accent-dot"></div> TOTAL TITLES</div>
+        <div class="text-3xl font-extrabold text-white"><%= totalCount %></div>
+        <p class="text-[11px] text-zinc-400">Aggregated across all 7 Firebase nodes</p>
+      </div>
+
+      <div class="bento-card p-5 space-y-2">
+        <div class="card-title-bento"><div class="accent-dot"></div> 🇵🇭 TAGALOG MOVIES</div>
+        <div class="text-3xl font-extrabold text-white"><%= (nodeStats['admin_tagalog_movies'] || 0) + (nodeStats['community_tagalog'] || 0) %></div>
+        <p class="text-[11px] text-zinc-400"><%= nodeStats['admin_tagalog_movies'] || 0 %> Admin + <%= nodeStats['community_tagalog'] || 0 %> Community</p>
+      </div>
+
+      <div class="bento-card p-5 space-y-2">
+        <div class="card-title-bento"><div class="accent-dot"></div> 📺 TV SERIES</div>
+        <div class="text-3xl font-extrabold text-white"><%= (nodeStats['admin_community_tagalog_series'] || 0) + (nodeStats['community_series'] || 0) %></div>
+        <p class="text-[11px] text-zinc-400"><%= nodeStats['admin_community_tagalog_series'] || 0 %> Tagalog + <%= nodeStats['community_series'] || 0 %> Series</p>
+      </div>
+
+      <div class="bento-card p-5 space-y-2">
+        <div class="card-title-bento"><div class="accent-dot"></div> 🍿 ANIME &amp; VIVAMAX</div>
+        <div class="text-3xl font-extrabold text-white"><%= (nodeStats['community_anime'] || 0) + (nodeStats['vivamax'] || 0) + (nodeStats['community_movies'] || 0) %></div>
+        <p class="text-[11px] text-zinc-400"><%= nodeStats['community_anime'] || 0 %> Anime + <%= nodeStats['vivamax'] || 0 %> Vivamax</p>
+      </div>
+    </div>
+
+    <!-- Main Content Section: Form & Live TMDB Search (Left) + Node Overview (Right) -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+      
+      <!-- Left Column: Add / Update Stream Form (7 Cols) -->
+      <div class="lg:col-span-7 space-y-6">
+
+        <!-- TMDB Live Search Bar Bento Card -->
+        <div class="bento-card p-5 space-y-3 bg-gradient-to-br from-[#141414] to-[#0f0f0f] border-rose-500/25 shadow-lg shadow-rose-950/15">
+          <div class="flex items-center justify-between">
+            <div class="card-title-bento text-rose-400">
+              <div class="accent-dot"></div> TMDB TITLE SEARCH &amp; 1-CLICK AUTO-FILL
+            </div>
+            <span class="bento-badge font-mono text-[10px] text-rose-300 border-rose-500/30 bg-rose-950/30">
+              TMDB MULTI-SEARCH
+            </span>
+          </div>
+
+          <form onsubmit="event.preventDefault(); triggerAdminSearch();" class="flex gap-2">
+            <div class="relative flex-1">
+              <i data-lucide="search" class="w-4 h-4 text-zinc-500 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none"></i>
+              <input 
+                type="text" 
+                id="admin-search-input" 
+                placeholder="🔍 Search Movie / TV Title on TMDB (e.g. Inception, Dune, Stranger Things)..." 
+                class="w-full pl-10 pr-4 py-2.5 rounded-xl bento-input text-sm font-medium focus:outline-none focus:border-rose-500"
+              >
+            </div>
+            <button 
+              type="button" 
+              onclick="triggerAdminSearch()" 
+              class="px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-semibold text-xs transition flex items-center gap-1.5 shadow-md shadow-rose-600/25 flex-shrink-0 cursor-pointer"
+            >
+              <i data-lucide="sparkles" class="w-3.5 h-3.5"></i>
+              <span>Search TMDB</span>
+            </button>
+          </form>
+
+          <!-- Quick Discovery Tags -->
+          <div class="flex items-center gap-1.5 flex-wrap pt-0.5 text-[11px] text-zinc-400">
+            <span class="text-zinc-500 text-[10px] uppercase font-mono">Quick:</span>
+            <button type="button" onclick="quickSearchModal('Fight Club')" class="px-2 py-0.5 rounded-md bg-[#1a1a1a] hover:bg-zinc-800 text-zinc-300 hover:text-rose-400 border border-[#2b2b2b] transition">Fight Club</button>
+            <button type="button" onclick="quickSearchModal('Interstellar')" class="px-2 py-0.5 rounded-md bg-[#1a1a1a] hover:bg-zinc-800 text-zinc-300 hover:text-rose-400 border border-[#2b2b2b] transition">Interstellar</button>
+            <button type="button" onclick="quickSearchModal('Dune')" class="px-2 py-0.5 rounded-md bg-[#1a1a1a] hover:bg-zinc-800 text-zinc-300 hover:text-rose-400 border border-[#2b2b2b] transition">Dune</button>
+            <button type="button" onclick="quickSearchModal('Descendants of the Sun')" class="px-2 py-0.5 rounded-md bg-[#1a1a1a] hover:bg-zinc-800 text-zinc-300 hover:text-rose-400 border border-[#2b2b2b] transition">Descendants of the Sun</button>
+          </div>
+        </div>
+        
+        <!-- Entry Management Form -->
+        <div class="bento-card p-6 space-y-5" id="stream-form-container">
+          <div class="flex items-center justify-between border-b border-[#262626] pb-3">
+            <div class="card-title-bento text-white">
+              <div class="accent-dot"></div> <span id="form-heading-text">ADD / EDIT FIREBASE MEDIA ENTRY</span>
+            </div>
+            <span class="bento-badge font-mono text-[10px] text-rose-400 border-rose-500/30" id="form-mode-badge">
+              NEW ENTRY
+            </span>
+          </div>
+
+          <form action="/admin/save" method="POST" class="space-y-4" id="media-form">
+            <!-- Hidden Existing ID for Updates -->
+            <input type="hidden" name="existingId" id="field-existing-id" value="">
+
+            <!-- Row 1: Target Node & Type -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-xs font-semibold text-zinc-300 uppercase tracking-wider mb-2">
+                  Target Firebase Node *
+                </label>
+                <select 
+                  name="targetNode" 
+                  id="field-target-node" 
+                  onchange="handleTargetNodeChange(this.value)"
+                  class="w-full px-3.5 py-2.5 rounded-xl bento-input text-xs font-semibold focus:outline-none focus:border-rose-500 cursor-pointer"
+                >
+                  <optgroup label="Movies">
+                    <option value="admin_tagalog_movies">admin_tagalog_movies (VIP Tagalog)</option>
+                    <option value="community_movies">community_movies (General)</option>
+                    <option value="community_tagalog">community_tagalog (Community)</option>
+                    <option value="community_anime_movies">community_anime_movies (Anime Movies)</option>
+                    <option value="vivamax">vivamax (Premium)</option>
+                  </optgroup>
+                  <optgroup label="TV Series">
+                    <option value="admin_community_tagalog_series">admin_community_tagalog_series (Tagalog Series)</option>
+                    <option value="community_series">community_series (General Series)</option>
+                    <option value="community_anime">community_anime (Anime)</option>
+                  </optgroup>
+                </select>
+              </div>
+
+              <div>
+                <label class="block text-xs font-semibold text-zinc-300 uppercase tracking-wider mb-2">
+                  Media Type *
+                </label>
+                <select 
+                  name="type" 
+                  id="field-type" 
+                  onchange="toggleMediaType(this.value)"
+                  class="w-full px-3.5 py-2.5 rounded-xl bento-input text-xs font-semibold focus:outline-none focus:border-rose-500 cursor-pointer"
+                >
+                  <option value="movie">🎬 Movie</option>
+                  <option value="tv">📺 TV Series</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Row 2: Title & Category -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-xs font-semibold text-zinc-300 uppercase tracking-wider mb-2">
+                  Title *
+                </label>
+                <input 
+                  type="text" 
+                  name="title" 
+                  id="field-title" 
+                  required 
+                  placeholder="e.g. Acts of Vengeance Tagalog dubbed" 
+                  class="w-full px-3.5 py-2.5 rounded-xl bento-input text-xs focus:outline-none focus:border-rose-500"
+                >
+              </div>
+
+              <div>
+                <label class="block text-xs font-semibold text-zinc-300 uppercase tracking-wider mb-2">
+                  Category Tag
+                </label>
+                <input 
+                  type="text" 
+                  name="category" 
+                  id="field-category" 
+                  placeholder="e.g. VIP Tagalog (Admin) or tagalog_series" 
+                  class="w-full px-3.5 py-2.5 rounded-xl bento-input text-xs focus:outline-none focus:border-rose-500"
+                >
+              </div>
+            </div>
+
+            <!-- Row 3: Genre, Year, Rating -->
+            <div class="grid grid-cols-3 gap-3">
+              <div>
+                <label class="block text-xs font-semibold text-zinc-300 uppercase tracking-wider mb-2">
+                  Genre
+                </label>
+                <input 
+                  type="text" 
+                  name="genre" 
+                  id="field-genre" 
+                  placeholder="Action, Drama" 
+                  class="w-full px-3 py-2.5 rounded-xl bento-input text-xs focus:outline-none focus:border-rose-500"
+                >
+              </div>
+
+              <div>
+                <label class="block text-xs font-semibold text-zinc-300 uppercase tracking-wider mb-2">
+                  Year
+                </label>
+                <input 
+                  type="text" 
+                  name="year" 
+                  id="field-year" 
+                  placeholder="2024" 
+                  class="w-full px-3 py-2.5 rounded-xl bento-input text-xs focus:outline-none focus:border-rose-500"
+                >
+              </div>
+
+              <div>
+                <label class="block text-xs font-semibold text-zinc-300 uppercase tracking-wider mb-2">
+                  Rating
+                </label>
+                <input 
+                  type="text" 
+                  name="rating" 
+                  id="field-rating" 
+                  placeholder="8.5" 
+                  class="w-full px-3 py-2.5 rounded-xl bento-input text-xs focus:outline-none focus:border-rose-500"
+                >
+              </div>
+            </div>
+
+            <!-- Row 4: Poster & Backdrop Images -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-xs font-semibold text-zinc-300 uppercase tracking-wider mb-2">
+                  Poster Image URL (image)
+                </label>
+                <input 
+                  type="url" 
+                  name="image" 
+                  id="field-image" 
+                  placeholder="https://image.tmdb.org/t/p/w500/..." 
+                  class="w-full px-3.5 py-2.5 rounded-xl bento-input text-xs focus:outline-none focus:border-rose-500"
+                >
+              </div>
+
+              <div>
+                <label class="block text-xs font-semibold text-zinc-300 uppercase tracking-wider mb-2">
+                  Backdrop Image / Trailer URL
+                </label>
+                <input 
+                  type="text" 
+                  name="trailer" 
+                  id="field-trailer" 
+                  placeholder="https://www.youtube.com/watch?v=..." 
+                  class="w-full px-3.5 py-2.5 rounded-xl bento-input text-xs focus:outline-none focus:border-rose-500"
+                >
+              </div>
+            </div>
+
+            <!-- Row 5: Synopsis Overview -->
+            <div>
+              <label class="block text-xs font-semibold text-zinc-300 uppercase tracking-wider mb-2">
+                Synopsis / Description
+              </label>
+              <textarea 
+                name="description" 
+                id="field-description" 
+                rows="2" 
+                placeholder="Plot synopsis..." 
+                class="w-full px-3.5 py-2.5 rounded-xl bento-input text-xs focus:outline-none focus:border-rose-500"
+              ></textarea>
+            </div>
+
+            <!-- Movie Stream Link Section -->
+            <div id="movie-stream-container" class="space-y-2">
+              <label class="block text-xs font-semibold text-zinc-300 uppercase tracking-wider mb-1 flex items-center justify-between">
+                <span>Pipe-Separated Stream Links (streamLink)</span>
+                <span class="text-[10px] text-zinc-500">Delimited by " | "</span>
+              </label>
+              <input 
+                type="text" 
+                name="streamLink" 
+                id="field-streamlink" 
+                placeholder="https://short.icu/... | https://vidlink.pro/... | https://vidsrc.xyz/..." 
+                class="w-full px-3.5 py-2.5 rounded-xl bento-input text-xs font-mono text-rose-300 focus:outline-none focus:border-rose-500"
+              >
+              <p class="text-[11px] text-zinc-500">
+                You can provide multiple mirrors separated by pipes. The Smart Dual Player will render Server 1, Server 2, Server 3 buttons.
+              </p>
+            </div>
+
+            <!-- TV Series Seasons JSON Section (Visible if TV Series) -->
+            <div id="series-seasons-container" class="space-y-2 hidden">
+              <label class="block text-xs font-semibold text-zinc-300 uppercase tracking-wider mb-1 flex items-center justify-between">
+                <span>Series Seasons &amp; Episodes JSON (seasons)</span>
+                <button type="button" onclick="loadSampleSeasonsJson()" class="text-[10px] text-blue-400 hover:text-blue-300">
+                  Insert Sample JSON
+                </button>
+              </label>
+              <textarea 
+                name="seasonsJson" 
+                id="field-seasons-json" 
+                rows="4" 
+                placeholder='{"Season 1": {"Ep 1": "https://short.icu/... | https://vidlink.pro/..."}}' 
+                class="w-full px-3.5 py-2.5 rounded-xl bento-input text-xs font-mono text-blue-300 focus:outline-none focus:border-blue-500"
+              ></textarea>
+            </div>
+
+            <!-- Submit & Reset Actions -->
+            <div class="pt-3 border-t border-[#262626] flex items-center justify-between gap-3">
+              <button 
+                type="button" 
+                onclick="resetAdminForm()" 
+                class="px-4 py-2.5 rounded-xl bg-[#181818] hover:bg-zinc-800 text-zinc-400 hover:text-white text-xs font-semibold border border-[#262626] transition cursor-pointer"
+              >
+                Clear Form
+              </button>
+
+              <button 
+                type="submit" 
+                class="px-6 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs transition flex items-center gap-2 shadow-lg shadow-rose-600/30 cursor-pointer"
+              >
+                <i data-lucide="save" class="w-4 h-4"></i>
+                <span id="submit-btn-text">Save to Firebase Database</span>
+              </button>
+            </div>
+
+          </form>
+        </div>
+
+      </div>
+
+      <!-- Right Column: Database Info & Schema Guide (5 Cols) -->
+      <div class="lg:col-span-5 space-y-6">
+
+        <div class="bento-card p-5 space-y-4">
+          <div class="card-title-bento text-rose-400">
+            <div class="accent-dot"></div> FIREBASE REALTIME DATABASE TARGET
+          </div>
+
+          <div class="p-3.5 rounded-xl bg-[#181818] border border-[#262626] space-y-1.5 text-xs font-mono">
+            <div class="text-[11px] text-zinc-400">Base REST Endpoint:</div>
+            <div class="text-rose-400 break-all text-xs font-bold"><%= firebaseDatabaseUrl %></div>
+          </div>
+
+          <div class="space-y-2 text-xs">
+            <div class="text-zinc-400 font-semibold uppercase tracking-wider text-[10px]">Supported Content Nodes:</div>
+            
+            <div class="space-y-1.5">
+              <% Object.entries(firebaseNodes).forEach(function([k, m]) { %>
+                <div class="flex items-center justify-between p-2 rounded-lg bg-[#141414] border border-[#262626] text-xs">
+                  <div class="flex items-center gap-2">
+                    <span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
+                    <span class="font-mono text-zinc-200"><%= k %></span>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <span class="bento-badge font-mono text-[9px] text-zinc-400"><%= nodeStats[k] || 0 %> items</span>
+                    <span class="text-[10px] text-rose-400"><%= m.badge %></span>
+                  </div>
+                </div>
+              <% }); %>
+            </div>
+          </div>
+        </div>
+
+        <div class="bento-card p-5 space-y-3 bg-[#101010]">
+          <div class="card-title-bento text-zinc-300">
+            <div class="accent-dot"></div> SMART DUAL PLAYER ENGINE RULES
+          </div>
+          <ul class="text-[11px] text-zinc-400 space-y-2 list-disc list-inside leading-relaxed">
+            <li><strong class="text-zinc-200">Direct Media:</strong> URLs ending in <code class="text-rose-400">.mp4</code> or <code class="text-rose-400">.m3u8</code> launch Artplayer with HLS.js adaptive streaming and download controls.</li>
+            <li><strong class="text-zinc-200">Web Embeds:</strong> URLs containing <code class="text-rose-400">short.icu</code>, <code class="text-rose-400">vidlink.pro</code>, <code class="text-rose-400">vidsrc</code>, or <code class="text-rose-400">/embed/</code> render a responsive sandboxed iFrame.</li>
+            <li><strong class="text-zinc-200">Multi-Mirroring:</strong> Split multiple links with <code class="text-rose-400"> | </code> to give viewers Server 1, Server 2, Server 3 switcher buttons.</li>
+          </ul>
+        </div>
+
+      </div>
+
+    </div>
+
+    <!-- Live Inventory Section -->
+    <div class="bento-card p-6 space-y-5" id="database-inventory">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#262626] pb-4">
+        <div>
+          <div class="card-title-bento text-white"><div class="accent-dot"></div> FIREBASE CONTENT INVENTORY</div>
+          <p class="text-xs text-zinc-400 mt-0.5">Manage, preview, edit, or delete items from the database</p>
+        </div>
+
+        <!-- Inventory Search & Filter -->
+        <div class="flex items-center gap-2">
+          <input 
+            type="text" 
+            id="inventory-filter-input" 
+            oninput="filterInventoryList()" 
+            placeholder="Filter by title, node, or genre..." 
+            class="px-3.5 py-1.5 rounded-xl bento-input text-xs focus:outline-none focus:border-rose-500 w-48 sm:w-64"
+          >
+          <select 
+            id="inventory-node-filter" 
+            onchange="filterInventoryList()"
+            class="px-3 py-1.5 rounded-xl bento-input text-xs font-semibold focus:outline-none focus:border-rose-500 cursor-pointer"
+          >
+            <option value="ALL">All Nodes (<%= items.length %>)</option>
+            <% Object.entries(firebaseNodes).forEach(function([k, m]) { %>
+              <option value="<%= k %>"><%= k %> (<%= nodeStats[k] || 0 %>)</option>
+            <% }); %>
+          </select>
+        </div>
+      </div>
+
+      <!-- Inventory Grid -->
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" id="inventory-items-container">
+        <% items.forEach(function(item) { %>
+          <div 
+            class="inventory-item-card bento-card p-4 flex gap-3.5 relative group hover:border-zinc-700 transition"
+            data-title="<%= (item.title || '').toLowerCase() %>"
+            data-node="<%= item.node %>"
+            data-genre="<%= (item.genre || '').toLowerCase() %>"
+          >
+            <!-- Poster Image -->
+            <div class="w-16 h-24 rounded-lg overflow-hidden bg-[#181818] flex-shrink-0 border border-[#262626]">
+              <img 
+                src="<%= item.image || item.poster %>" 
+                alt="<%= item.title %>" 
+                loading="lazy"
+                class="w-full h-full object-cover"
+                onerror="this.src='https://images.unsplash.com/photo-1536440136628-849c177e76a1?auto=format&fit=crop&w=500&q=80'"
+              >
+            </div>
+
+            <!-- Details -->
+            <div class="flex-1 min-w-0 flex flex-col justify-between">
+              <div>
+                <div class="flex items-center gap-1.5 mb-1 flex-wrap">
+                  <span class="bento-badge font-mono text-[9px] text-rose-400 border-rose-500/30"><%= item.node %></span>
+                  <span class="text-[10px] text-zinc-500 font-mono">(<%= item.year %>)</span>
+                </div>
+                <h4 class="text-xs font-bold text-white truncate" title="<%= item.title %>"><%= item.title %></h4>
+                <p class="text-[10px] text-zinc-400 truncate mt-0.5"><%= item.genre %></p>
+              </div>
+
+              <!-- Action Buttons -->
+              <div class="pt-2 border-t border-[#222] flex items-center justify-between gap-2">
+                <a 
+                  href="/watch/<%= item.type %>/<%= item.node %>/<%= item.id %>" 
+                  target="_blank" 
+                  class="text-[10px] text-zinc-400 hover:text-white flex items-center gap-1"
+                >
+                  <i data-lucide="play" class="w-3 h-3 text-rose-500"></i> Watch
+                </a>
+
+                <div class="flex items-center gap-1.5">
+                  <button 
+                    type="button" 
+                    data-item="<%- encodeURIComponent(JSON.stringify(item)) %>"
+                    onclick="handleEditItem(this)"
+                    class="px-2.5 py-1 rounded-lg bg-[#181818] hover:bg-zinc-800 text-zinc-300 text-[10px] font-semibold border border-[#262626] transition cursor-pointer"
+                  >
+                    Edit
+                  </button>
+
+                  <form action="/admin/delete" method="POST" onsubmit="return confirm('Are you sure you want to delete this item from <%= item.node %>?');">
+                    <input type="hidden" name="id" value="<%= item.id %>">
+                    <input type="hidden" name="node" value="<%= item.node %>">
+                    <button 
+                      type="submit" 
+                      class="px-2.5 py-1 rounded-lg bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 text-[10px] font-semibold border border-rose-600/30 transition cursor-pointer"
+                    >
+                      Delete
+                    </button>
+                  </form>
+                </div>
+              </div>
+            </div>
+          </div>
+        <% }); %>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Live TMDB Search Modal Dialog -->
+  <div 
+    id="tmdb-search-modal" 
+    class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 opacity-0 pointer-events-none transition-opacity duration-200"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="modal-title"
+    onclick="handleModalBackdropClick(event)"
+  >
+    <div 
+      id="tmdb-modal-card" 
+      class="bg-[#0e0e0e] border border-[#2b2b2b] rounded-2xl w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl shadow-rose-950/20 transform scale-95 transition-transform duration-200 overflow-hidden"
+      onclick="event.stopPropagation()"
+    >
+      <!-- Modal Header -->
+      <div class="p-4 sm:p-5 border-b border-[#262626] bg-[#121212] flex items-center justify-between gap-3">
+        <div class="flex items-center gap-2.5">
+          <div class="accent-dot"></div>
+          <div>
+            <h2 id="modal-title" class="text-sm sm:text-base font-bold text-white flex items-center gap-2">
+              TMDB Title Search &amp; Auto-Fill
+            </h2>
+            <p class="text-[11px] text-zinc-400">Search global movies and TV shows to auto-populate metadata</p>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <span id="modal-result-count" class="hidden sm:inline-flex bento-badge font-mono text-[10px] text-zinc-400">
+            Ready
+          </span>
+          <button 
+            type="button" 
+            onclick="closeTmdbSearchModal()" 
+            class="p-2 rounded-xl bg-[#181818] hover:bg-zinc-800 text-zinc-400 hover:text-white border border-[#262626] transition flex items-center justify-center cursor-pointer"
+            title="Close (Esc)"
+          >
+            <i data-lucide="x" class="w-4 h-4"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- Modal Search Bar -->
+      <div class="p-4 sm:p-5 border-b border-[#262626] bg-[#0c0c0c]">
+        <form onsubmit="event.preventDefault(); executeModalSearch();" class="flex gap-2">
+          <div class="relative flex-1">
+            <i data-lucide="search" class="w-4 h-4 text-zinc-500 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none"></i>
+            <input 
+              type="text" 
+              id="modal-search-input" 
+              placeholder="Search movie or TV show title (e.g. Fight Club, Inception, Breaking Bad)..." 
+              class="w-full pl-10 pr-4 py-2.5 rounded-xl bento-input text-sm font-medium focus:outline-none focus:border-rose-500"
+            >
+          </div>
+          <button 
+            type="submit" 
+            id="modal-search-btn"
+            class="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-semibold text-xs transition flex items-center gap-1.5 shadow-md shadow-rose-600/25 flex-shrink-0 cursor-pointer"
+          >
+            <i data-lucide="search" class="w-3.5 h-3.5"></i>
+            <span>Search</span>
+          </button>
+        </form>
+      </div>
+
+      <!-- Modal Body / Results Grid -->
+      <div id="modal-body-scroll" class="p-4 sm:p-5 overflow-y-auto flex-1 max-h-[60vh] space-y-4">
+        
+        <div id="modal-loading-state" class="hidden py-16 text-center space-y-3">
+          <div class="inline-block w-8 h-8 border-2 border-rose-500 border-t-transparent rounded-full animate-spin"></div>
+          <div class="text-xs font-mono text-zinc-400">Querying TMDB Multi-Search API...</div>
+        </div>
+
+        <div id="modal-empty-initial" class="py-16 text-center space-y-2">
+          <i data-lucide="film" class="w-10 h-10 text-zinc-700 mx-auto"></i>
+          <p class="text-xs text-zinc-400">Type a title above and press Search</p>
+        </div>
+
+        <div id="modal-not-found-state" class="hidden py-16 text-center space-y-2">
+          <i data-lucide="alert-circle" class="w-10 h-10 text-amber-500/70 mx-auto"></i>
+          <p class="text-xs text-zinc-300 font-semibold">No matching media titles found on TMDB</p>
+        </div>
+
+        <div id="modal-results-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5"></div>
+      </div>
+
+      <!-- Modal Footer -->
+      <div class="p-3.5 px-5 border-t border-[#262626] bg-[#121212] flex items-center justify-between text-xs text-zinc-400">
+        <span class="flex items-center gap-1 text-[11px]">
+          <span class="text-rose-400">💡</span> Click any title to auto-fill metadata into the form.
+        </span>
+        <button 
+          type="button" 
+          onclick="closeTmdbSearchModal()" 
+          class="text-xs text-zinc-400 hover:text-white transition font-medium cursor-pointer"
+        >
+          Cancel [Esc]
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <footer class="border-t border-[#262626] bg-[#080808] py-6 mt-12 text-xs text-zinc-500 text-center">
+    <div class="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+      <div>StreamPortal Admin CP • Firebase Realtime Database Engine</div>
+      <div class="font-mono text-[10px] text-zinc-600">RTDB: <%= firebaseDatabaseUrl %></div>
+    </div>
+  </footer>
+
+  <script>
+    lucide.createIcons();
+
+    // Toggle fields based on media type
+    function toggleMediaType(type) {
+      const isTv = type === 'tv';
+      const movieStreamBox = document.getElementById('movie-stream-container');
+      const seriesSeasonsBox = document.getElementById('series-seasons-container');
+      const nodeSelect = document.getElementById('field-target-node');
+
+      if (isTv) {
+        seriesSeasonsBox.classList.remove('hidden');
+        if (nodeSelect.value.startsWith('admin_tagalog_movies') || nodeSelect.value.startsWith('community_movies') || nodeSelect.value.startsWith('vivamax')) {
+          nodeSelect.value = 'admin_community_tagalog_series';
+        }
+      } else {
+        seriesSeasonsBox.classList.add('hidden');
+        if (nodeSelect.value.startsWith('admin_community_tagalog_series') || nodeSelect.value.startsWith('community_series') || nodeSelect.value.startsWith('community_anime')) {
+          nodeSelect.value = 'admin_tagalog_movies';
+        }
+      }
+    }
+
+    function handleTargetNodeChange(node) {
+      const isTvNode = node.includes('series') || node.includes('anime');
+      const typeSelect = document.getElementById('field-type');
+      typeSelect.value = isTvNode ? 'tv' : 'movie';
+      toggleMediaType(typeSelect.value);
+    }
+
+    function resetAdminForm() {
+      document.getElementById('media-form').reset();
+      document.getElementById('field-existing-id').value = '';
+      document.getElementById('form-heading-text').innerText = 'ADD / EDIT FIREBASE MEDIA ENTRY';
+      document.getElementById('form-mode-badge').innerText = 'NEW ENTRY';
+      document.getElementById('submit-btn-text').innerText = 'Save to Firebase Database';
+      toggleMediaType('movie');
+    }
+
+    function handleEditItem(btn) {
+      try {
+        const raw = btn.getAttribute('data-item');
+        if (!raw) return;
+        const item = JSON.parse(decodeURIComponent(raw));
+        
+        document.getElementById('field-existing-id').value = item.id || '';
+        document.getElementById('field-target-node').value = item.node || 'admin_tagalog_movies';
+        document.getElementById('field-type').value = item.type || 'movie';
+        document.getElementById('field-title').value = item.title || '';
+        document.getElementById('field-category').value = item.category || '';
+        document.getElementById('field-genre').value = item.genre || '';
+        document.getElementById('field-year').value = item.year || '';
+        document.getElementById('field-rating').value = item.rating || '';
+        document.getElementById('field-image').value = item.image || item.poster || '';
+        document.getElementById('field-trailer').value = item.trailer || '';
+        document.getElementById('field-description').value = item.description || '';
+        document.getElementById('field-streamlink').value = item.streamLink || '';
+
+        if (item.seasons) {
+          document.getElementById('field-seasons-json').value = JSON.stringify(item.seasons, null, 2);
+        }
+
+        toggleMediaType(item.type || 'movie');
+
+        document.getElementById('form-heading-text').innerText = `EDITING "${item.title}" (#${item.id})`;
+        document.getElementById('form-mode-badge').innerText = 'EDIT MODE';
+        document.getElementById('submit-btn-text').innerText = 'Update in Firebase';
+
+        document.getElementById('stream-form-container').scrollIntoView({ behavior: 'smooth' });
+      } catch (err) {
+        console.error('Error preparing edit:', err);
+      }
+    }
+
+    function loadSampleSeasonsJson() {
+      const sample = {
+        "Season 1": {
+          "Ep 1": "https://short.icu/77lkzxVf5 | https://vidlink.pro/tv/65143/1/1",
+          "Ep 2": "https://short.icu/77lkzxVf5 | https://vidlink.pro/tv/65143/1/2"
+        }
+      };
+      document.getElementById('field-seasons-json').value = JSON.stringify(sample, null, 2);
+    }
+
+    function filterInventoryList() {
+      const textQuery = (document.getElementById('inventory-filter-input').value || '').trim().toLowerCase();
+      const nodeFilter = document.getElementById('inventory-node-filter').value;
+      const cards = document.querySelectorAll('.inventory-item-card');
+
+      cards.forEach(card => {
+        const title = card.getAttribute('data-title') || '';
+        const node = card.getAttribute('data-node') || '';
+        const genre = card.getAttribute('data-genre') || '';
+
+        const matchesText = !textQuery || title.includes(textQuery) || genre.includes(textQuery) || node.includes(textQuery);
+        const matchesNode = nodeFilter === 'ALL' || node === nodeFilter;
+
+        if (matchesText && matchesNode) {
+          card.classList.remove('hidden');
+        } else {
+          card.classList.add('hidden');
+        }
+      });
+    }
+
+    // ---------------------------------------------------------------------------
+    // TMDB MODAL LOGIC
+    // ---------------------------------------------------------------------------
+    let currentSearchResults = [];
+
+    function triggerAdminSearch() {
+      const q = document.getElementById('admin-search-input').value.trim();
+      openTmdbSearchModal(q);
+    }
+
+    function quickSearchModal(query) {
+      openTmdbSearchModal(query);
+    }
+
+    function openTmdbSearchModal(initialQuery = '') {
+      const modal = document.getElementById('tmdb-search-modal');
+      const modalCard = document.getElementById('tmdb-modal-card');
+      const searchInput = document.getElementById('modal-search-input');
+
+      modal.classList.remove('opacity-0', 'pointer-events-none');
+      modalCard.classList.remove('scale-95');
+      modalCard.classList.add('scale-100');
+      document.body.style.overflow = 'hidden';
+
+      if (initialQuery && initialQuery.trim()) {
+        searchInput.value = initialQuery.trim();
+        executeModalSearch();
+      } else {
+        searchInput.focus();
+      }
+
+      setTimeout(() => lucide.createIcons(), 50);
+    }
+
+    function closeTmdbSearchModal() {
+      const modal = document.getElementById('tmdb-search-modal');
+      const modalCard = document.getElementById('tmdb-modal-card');
+
+      modalCard.classList.remove('scale-100');
+      modalCard.classList.add('scale-95');
+      modal.classList.add('opacity-0', 'pointer-events-none');
+      document.body.style.overflow = '';
+    }
+
+    function handleModalBackdropClick(event) {
+      if (event.target === document.getElementById('tmdb-search-modal')) {
+        closeTmdbSearchModal();
+      }
+    }
+
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        const modal = document.getElementById('tmdb-search-modal');
+        if (!modal.classList.contains('pointer-events-none')) {
+          closeTmdbSearchModal();
+        }
+      }
+    });
+
+    async function executeModalSearch() {
+      const query = document.getElementById('modal-search-input').value.trim();
+      const resultsGrid = document.getElementById('modal-results-grid');
+      const loadingState = document.getElementById('modal-loading-state');
+      const emptyInitial = document.getElementById('modal-empty-initial');
+      const notFoundState = document.getElementById('modal-not-found-state');
+      const resultCountBadge = document.getElementById('modal-result-count');
+
+      if (!query) {
+        resultsGrid.innerHTML = '';
+        emptyInitial.classList.remove('hidden');
+        notFoundState.classList.add('hidden');
+        loadingState.classList.add('hidden');
+        resultCountBadge.innerText = 'Ready';
+        return;
+      }
+
+      emptyInitial.classList.add('hidden');
+      notFoundState.classList.add('hidden');
+      loadingState.classList.remove('hidden');
+      resultsGrid.innerHTML = '';
+      resultCountBadge.innerText = 'Searching...';
+
+      try {
+        const response = await fetch(`/api/tmdb/search?query=${encodeURIComponent(query)}`);
+        const data = await response.json();
+        loadingState.classList.add('hidden');
+
+        currentSearchResults = data.results || [];
+        resultCountBadge.innerText = `${currentSearchResults.length} Results`;
+
+        if (currentSearchResults.length === 0) {
+          notFoundState.classList.remove('hidden');
+          return;
+        }
+
+        renderModalSearchResults(currentSearchResults);
+      } catch (err) {
+        console.error('Error in TMDB search:', err);
+        loadingState.classList.add('hidden');
+        notFoundState.classList.remove('hidden');
+      }
+    }
+
+    function renderModalSearchResults(items) {
+      const grid = document.getElementById('modal-results-grid');
+      grid.innerHTML = '';
+
+      items.forEach((item, index) => {
+        const isTv = item.media_type === 'tv';
+        const posterSrc = item.poster_url || (item.poster_path ? `https://image.tmdb.org/t/p/w500${item.poster_path}` : '');
+        const yearStr = item.year ? item.year : '';
+        const titleEscaped = (item.title || item.name || '').replace(/"/g, '&quot;');
+        const overviewSnippet = item.overview ? (item.overview.length > 80 ? item.overview.substring(0, 80) + '...' : item.overview) : 'No description.';
+
+        const card = document.createElement('div');
+        card.className = 'bento-card p-3 flex gap-3 cursor-pointer hover:border-rose-500 hover:bg-[#161616] transition group relative';
+        card.onclick = () => selectTmdbResult(index);
+
+        card.innerHTML = `
+          <div class="w-16 h-24 rounded-lg bg-[#1a1a1a] flex-shrink-0 overflow-hidden relative border border-[#2b2b2b]">
+            ${posterSrc ? `
+              <img src="${posterSrc}" alt="${titleEscaped}" loading="lazy" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300">
+            ` : `
+              <div class="w-full h-full flex items-center justify-center text-zinc-600 text-[10px]">No Poster</div>
+            `}
+          </div>
+
+          <div class="flex-1 flex flex-col justify-between min-w-0">
+            <div>
+              <div class="flex items-center gap-1.5 mb-1">
+                <span class="bento-badge font-mono text-[9px] ${isTv ? 'text-blue-400 border-blue-500/30' : 'text-rose-400 border-rose-500/30'}">
+                  ${isTv ? '📺 TV SERIES' : '🎬 MOVIE'}
+                </span>
+                ${yearStr ? `<span class="text-[10px] text-zinc-400 font-mono">(${yearStr})</span>` : ''}
+              </div>
+
+              <h3 class="text-xs font-bold text-white group-hover:text-rose-400 transition truncate" title="${titleEscaped}">
+                ${item.title || item.name}
+              </h3>
+
+              <p class="text-[11px] text-zinc-400 line-clamp-2 mt-1 leading-tight">
+                ${overviewSnippet}
+              </p>
+            </div>
+
+            <div class="pt-2 border-t border-[#222] flex items-center justify-between text-[10px]">
+              <span class="text-amber-400">⭐ ${item.vote_average || '7.5'}</span>
+              <span class="text-rose-400 font-semibold">Auto-Fill Form &rarr;</span>
+            </div>
+          </div>
+        `;
+
+        grid.appendChild(card);
+      });
+
+      lucide.createIcons();
+    }
+
+    function selectTmdbResult(index) {
+      const item = currentSearchResults[index];
+      if (!item) return;
+
+      const isTv = item.media_type === 'tv';
+      const yearStr = item.year ? ` (${item.year})` : '';
+      const formattedTitle = `${item.title || item.name || 'Media'}${yearStr}`;
+      const posterUrl = item.poster_url || (item.poster_path ? `https://image.tmdb.org/t/p/w500${item.poster_path}` : '');
+
+      document.getElementById('field-title').value = formattedTitle;
+      document.getElementById('field-type').value = isTv ? 'tv' : 'movie';
+      document.getElementById('field-year').value = item.year || '';
+      document.getElementById('field-rating').value = item.vote_average || '8.0';
+      document.getElementById('field-image').value = posterUrl;
+      document.getElementById('field-description').value = item.overview || '';
+
+      toggleMediaType(isTv ? 'tv' : 'movie');
+
+      closeTmdbSearchModal();
+
+      const streamInput = document.getElementById('field-streamlink');
+      if (streamInput) {
+        streamInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        setTimeout(() => {
+          streamInput.focus();
+          streamInput.classList.add('ring-2', 'ring-rose-500');
+          setTimeout(() => streamInput.classList.remove('ring-2', 'ring-rose-500'), 1500);
+        }, 300);
+      }
+    }
+  </script>
+</body>
+</html>

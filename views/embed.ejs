@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="en" class="dark h-full w-full bg-black">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title><%= pageTitle || 'Embed Player' %></title>
+  <meta name="robots" content="noindex, nofollow">
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            accent: {
+              DEFAULT: '#e11d48',
+              hover: '#f43f5e',
+              glow: 'rgba(225, 29, 72, 0.4)'
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- HLS.js for Adaptive Stream Playback (.m3u8) -->
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+
+  <!-- DASH.js for MPEG-DASH Stream Playback (.mpd) -->
+  <script src="https://cdn.jsdelivr.net/npm/dashjs@latest/dist/dash.all.min.js"></script>
+
+  <!-- Artplayer.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/artplayer/dist/artplayer.js"></script>
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+    html, body {
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      background-color: #000000;
+      color: #ffffff;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    }
+    .artplayer-app {
+      width: 100vw;
+      height: 100vh;
+      background-color: #000000;
+    }
+    .glass-pill {
+      background: rgba(18, 18, 18, 0.85);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+    }
+    .hide-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+    .hide-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+  </style>
+</head>
+<body class="h-full w-full bg-black relative flex items-center justify-center select-none">
+
+  <!-- 1. Artplayer Container (Direct MP4 / Telegram Bot Stream / HLS / DASH) -->
+  <div id="artplayer-container" class="artplayer-app w-full h-full absolute inset-0 z-10"></div>
+
+  <!-- 2. Responsive iFrame Player (Web Embeds: VidLink, Short.ICU, VidSrc, Streamtape, MultiEmbed) -->
+  <div id="iframe-container" class="w-full h-full hidden bg-black absolute inset-0 z-10">
+    <iframe 
+      id="active-player-iframe" 
+      src="" 
+      class="w-full h-full border-0" 
+      allow="autoplay; fullscreen; picture-in-picture; encrypted-media; gyroscope; accelerometer" 
+      allowfullscreen
+      referrerpolicy="no-referrer"
+    ></iframe>
+  </div>
+
+  <!-- Loading Screen -->
+  <div id="player-loading" class="absolute inset-0 bg-black flex flex-col items-center justify-center gap-3 z-30 transition-opacity duration-300 pointer-events-none">
+    <div class="relative w-10 h-10">
+      <div class="w-10 h-10 rounded-full border-2 border-rose-500/20 border-t-rose-500 animate-spin"></div>
+    </div>
+    <span class="text-[11px] font-mono tracking-widest text-zinc-400 uppercase">Connecting Stream...</span>
+  </div>
+
+  <!-- Floating Minimal Overlay Controls (Optimized for Android WebViews) -->
+  <div id="floating-controls" class="absolute top-3 inset-x-3 z-20 flex flex-wrap items-center justify-between gap-2 pointer-events-none transition-all duration-300">
+    
+    <!-- Left: Title & Season/Ep Badge -->
+    <div class="flex items-center gap-2 pointer-events-auto">
+      <div class="glass-pill px-3 py-1.5 rounded-full flex items-center gap-2 shadow-xl">
+        <span class="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></span>
+        <span class="text-xs font-bold text-white max-w-[150px] sm:max-w-[280px] truncate"><%= media.title %></span>
+        <% if (currentSeason && currentEpisode && seasonsData) { %>
+          <span class="text-[10px] font-mono text-rose-400 border-l border-white/20 pl-2">
+            <%= currentSeason %> • <%= currentEpisode %>
+          </span>
+        <% } %>
+      </div>
+    </div>
+
+    <!-- Right: Server Mirror Buttons & Controls -->
+    <div class="flex items-center gap-1.5 pointer-events-auto hide-scrollbar overflow-x-auto max-w-full">
+      
+      <!-- Multi-Server Mirror Switcher Buttons -->
+      <% if (servers && servers.length > 0) { %>
+        <div class="glass-pill p-1 rounded-full flex items-center gap-1 shadow-xl">
+          <% servers.forEach(function(srv, idx) { %>
+            <button 
+              type="button"
+              onclick="selectEmbedServer('<%= srv.url %>', '<%= srv.name %>', <%= idx %>, <%= srv.isEmbed %>)"
+              id="embed-srv-btn-<%= idx %>"
+              class="embed-server-btn px-2.5 py-1 rounded-full text-[11px] font-semibold transition-all duration-200 <%= idx === activeServerIndex ? 'bg-rose-600 text-white shadow-md shadow-rose-600/30' : 'text-zinc-300 hover:text-white hover:bg-white/10' %>"
+            >
+              <%= srv.name %>
+            </button>
+          <% }); %>
+        </div>
+      <% } %>
+
+      <!-- Episode Switcher Dropdown (If TV Series / Anime) -->
+      <% if (seasonsData && seasonNames && seasonNames.length > 0) { %>
+        <div class="relative">
+          <button 
+            type="button" 
+            onclick="toggleEpisodeDrawer()" 
+            class="glass-pill px-2.5 py-1 rounded-full text-[11px] font-semibold text-zinc-300 hover:text-white flex items-center gap-1 transition"
+          >
+            <i data-lucide="list" class="w-3.5 h-3.5 text-rose-400"></i>
+            <span>Episodes</span>
+          </button>
+        </div>
+      <% } %>
+
+      <!-- Reload Stream Button -->
+      <button 
+        type="button" 
+        onclick="reloadCurrentStream()" 
+        class="glass-pill p-1.5 rounded-full text-zinc-300 hover:text-white transition"
+        title="Reload Stream"
+      >
+        <i data-lucide="rotate-cw" class="w-3.5 h-3.5"></i>
+      </button>
+
+    </div>
+  </div>
+
+  <!-- TV Series Episode Selector Modal / Drawer -->
+  <% if (seasonsData && seasonNames && seasonNames.length > 0) { %>
+    <div id="episodes-drawer" class="hidden absolute inset-0 z-40 bg-black/85 backdrop-blur-md p-4 flex flex-col justify-end sm:justify-center items-center">
+      <div class="w-full max-w-lg bg-[#141414] border border-[#2b2b2b] rounded-2xl p-4 space-y-4 shadow-2xl max-h-[85vh] flex flex-col">
+        <div class="flex items-center justify-between border-b border-[#262626] pb-3">
+          <div class="flex items-center gap-2">
+            <i data-lucide="tv" class="w-4 h-4 text-rose-500"></i>
+            <span class="text-xs font-bold text-white uppercase tracking-wider">Select Episode</span>
+          </div>
+          <button type="button" onclick="toggleEpisodeDrawer()" class="text-zinc-400 hover:text-white p-1">
+            <i data-lucide="x" class="w-4 h-4"></i>
+          </button>
+        </div>
+
+        <!-- Season selector pills -->
+        <div class="flex items-center gap-2 overflow-x-auto hide-scrollbar pb-1">
+          <% seasonNames.forEach(function(sName) { %>
+            <button 
+              type="button" 
+              onclick="changeEmbedSeason('<%= sName %>')" 
+              id="embed-season-tab-<%= sName.replace(/\s+/g, '-') %>"
+              class="embed-season-pill px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition <%= sName === currentSeason ? 'bg-rose-600 text-white' : 'bg-[#1e1e1e] text-zinc-400 hover:text-white' %>"
+            >
+              <%= sName %>
+            </button>
+          <% }); %>
+        </div>
+
+        <!-- Episode buttons grid -->
+        <div class="flex-1 overflow-y-auto max-h-60 grid grid-cols-3 sm:grid-cols-4 gap-2 pr-1" id="embed-episodes-grid">
+          <% (episodeKeys || []).forEach(function(epKey) { %>
+            <button 
+              type="button" 
+              onclick="playEmbedEpisode('<%= currentSeason %>', '<%= epKey %>')"
+              class="p-2.5 rounded-xl text-xs font-bold text-center transition <%= epKey === currentEpisode ? 'bg-rose-600 text-white shadow-md shadow-rose-600/30' : 'bg-[#1c1c1c] text-zinc-300 hover:bg-zinc-800 hover:text-white border border-[#282828]' %>"
+            >
+              <%= epKey %>
+            </button>
+          <% }); %>
+        </div>
+      </div>
+    </div>
+  <% } %>
+
+  <!-- Logic & Engine Scripts -->
+  <script>
+    lucide.createIcons();
+
+    const mediaTitle = "<%= (media.title || 'Stream').replace(/\"/g, '\\"') %>";
+    const mediaPoster = "<%= media.poster || media.image || media.backdrop || '' %>";
+    let seasonsData = <%- JSON.stringify(seasonsData || null) %>;
+    let currentSeason = "<%= currentSeason || 'Season 1' %>";
+    let currentEpisode = "<%= currentEpisode || 'Ep 1' %>";
+    let servers = <%- JSON.stringify(servers || []) %>;
+    let activeServerIndex = <%= activeServerIndex || 0 %>;
+    let currentUrl = servers[activeServerIndex] ? servers[activeServerIndex].url : '';
+    let currentIsEmbed = servers[activeServerIndex] ? Boolean(servers[activeServerIndex].isEmbed) : false;
+
+    let artInstance = null;
+    const loader = document.getElementById('player-loading');
+
+    function showLoader(show) {
+      if (!loader) return;
+      if (show) {
+        loader.classList.remove('opacity-0', 'pointer-events-none');
+      } else {
+        loader.classList.add('opacity-0', 'pointer-events-none');
+      }
+    }
+
+    /**
+     * Switch Active Server
+     */
+    function selectEmbedServer(url, name, index, isEmbed) {
+      activeServerIndex = index;
+      currentUrl = url;
+      currentIsEmbed = Boolean(isEmbed);
+
+      const buttons = document.querySelectorAll('.embed-server-btn');
+      buttons.forEach((btn, idx) => {
+        if (idx === index) {
+          btn.className = "embed-server-btn px-2.5 py-1 rounded-full text-[11px] font-semibold transition-all duration-200 bg-rose-600 text-white shadow-md shadow-rose-600/30";
+        } else {
+          btn.className = "embed-server-btn px-2.5 py-1 rounded-full text-[11px] font-semibold transition-all duration-200 text-zinc-300 hover:text-white hover:bg-white/10";
+        }
+      });
+
+      loadEngine(url, isEmbed);
+    }
+
+    /**
+     * Smart Engine Loader
+     */
+    function loadEngine(url, isEmbed) {
+      showLoader(true);
+      const artContainer = document.getElementById('artplayer-container');
+      const iframeContainer = document.getElementById('iframe-container');
+      const iframeElement = document.getElementById('active-player-iframe');
+
+      if (!url) {
+        showLoader(false);
+        return;
+      }
+
+      // Check if URL is an embed source (Short.icu, VidLink, VidSrc, Streamtape, MultiEmbed, etc.)
+      const isEmbedUrl = isEmbed || 
+        url.includes('short.icu') || 
+        url.includes('vidlink') || 
+        url.includes('vidsrc') || 
+        url.includes('streamtape') || 
+        url.includes('vidfast') || 
+        url.includes('multiembed') || 
+        url.includes('dood') || 
+        url.includes('filemoon') || 
+        url.includes('streamwish') || 
+        url.includes('/embed/') || 
+        url.includes('/e/');
+
+      if (isEmbedUrl) {
+        if (artInstance) {
+          try { artInstance.pause(); } catch(e) {}
+        }
+        artContainer.classList.add('hidden');
+        iframeContainer.classList.remove('hidden');
+
+        iframeElement.src = url;
+        iframeElement.onload = () => showLoader(false);
+        setTimeout(() => showLoader(false), 1200);
+
+      } else {
+        // Direct MP4 / Telegram Bot Range Stream / HLS / DASH via Artplayer
+        iframeElement.src = '';
+        iframeContainer.classList.add('hidden');
+        artContainer.classList.remove('hidden');
+
+        if (!artInstance) {
+          initArtplayer(url);
+        } else {
+          artInstance.switchUrl(url).then(() => {
+            showLoader(false);
+          }).catch(() => {
+            initArtplayer(url);
+          });
+        }
+      }
+    }
+
+    /**
+     * Artplayer Initializer with HLS (.m3u8), DASH (.mpd), and MTProto 512KB Streamer
+     */
+    function initArtplayer(streamUrl) {
+      const container = document.getElementById('artplayer-container');
+
+      if (artInstance && artInstance.destroy) {
+        try { artInstance.destroy(); } catch(e) {}
+      }
+
+      artInstance = new Artplayer({
+        container: container,
+        url: streamUrl,
+        poster: mediaPoster,
+        title: mediaTitle,
+        volume: 0.8,
+        isLive: false,
+        muted: false,
+        autoplay: true,
+        pip: true,
+        autoSize: false,
+        autoMini: true,
+        screenshot: true,
+        setting: true,
+        loop: false,
+        playbackRate: true,
+        aspectRatio: true,
+        fullscreen: true,
+        fullscreenWeb: true,
+        miniProgressBar: true,
+        playsInline: true,
+        airplay: true,
+        theme: '#e11d48',
+        lang: 'en',
+
+        // 🟢 Subtitle Configuration
+        subtitle: {
+          url: '',
+          type: 'vtt',
+          style: {
+            color: '#ffffff',
+            fontSize: '20px',
+            fontWeight: 'bold',
+          },
+          encoding: 'utf-8',
+          bilingual: true,
+        },
+
+        // 🟢 CC Settings Menu
+        settings: [
+          {
+            width: 250,
+            html: '💬 CC',
+            tooltip: 'Manage Captions',
+            selector: [
+              { default: true, html: '❌ Cc Off', url: '' },
+              { html: '📁 Import File (.srt / .vtt)', url: 'import' }
+            ],
+            onSelect: function (item) {
+              if (item.url === 'import') {
+                document.getElementById('subFileInput').click();
+              } else if (item.url) {
+                artInstance.subtitle.switch(item.url, { name: item.html, type: 'vtt' });
+                artInstance.subtitle.show = true;
+                artInstance.notice.show = 'Subtitle: ' + item.html;
+              } else {
+                artInstance.subtitle.show = false;
+                artInstance.notice.show = 'Subtitles Off';
+              }
+              return item.html;
+            },
+          },
+        ],
+
+        moreVideoAttr: {
+          crossOrigin: 'anonymous',
+          preload: 'metadata',
+          playsinline: 'true'
+        },
+        playbackRates: [0.5, 0.75, 1, 1.25, 1.5, 2],
+        customType: {
+          // HLS Adaptive (.m3u8) Support
+          m3u8: function (video, url, artObj) {
+            if (window.Hls && Hls.isSupported()) {
+              if (artObj.hls) artObj.hls.destroy();
+              const hls = new Hls({ enableWorker: true, lowLatencyMode: true });
+              hls.loadSource(url);
+              hls.attachMedia(video);
+              artObj.hls = hls;
+              artObj.on('destroy', () => hls.destroy());
+            } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+              video.src = url;
+            }
+          },
+          // MPEG-DASH (.mpd) Support
+          mpd: function (video, url, artObj) {
+            if (window.dashjs) {
+              if (artObj.dash) artObj.dash.reset();
+              const dash = dashjs.MediaPlayer().create();
+              dash.initialize(video, url, true);
+              artObj.dash = dash;
+              artObj.on('destroy', () => dash.reset());
+            }
+          }
+        }
+      });
+
+      artInstance.on('ready', () => showLoader(false));
+      artInstance.on('video:canplay', () => showLoader(false));
+      artInstance.on('video:playing', () => showLoader(false));
+      artInstance.on('video:waiting', () => showLoader(true));
+
+      artInstance.on('error', (err) => {
+        console.warn('Artplayer embed stream notice:', err);
+        showLoader(false);
+      });
+    }
+
+    function reloadCurrentStream() {
+      if (currentUrl) {
+        loadEngine(currentUrl, currentIsEmbed);
+      }
+    }
+
+    function toggleEpisodeDrawer() {
+      const drawer = document.getElementById('episodes-drawer');
+      if (drawer) {
+        drawer.classList.toggle('hidden');
+      }
+    }
+
+    function changeEmbedSeason(seasonName) {
+      if (!seasonsData || !seasonsData[seasonName]) return;
+      currentSeason = seasonName;
+
+      // Update season tabs
+      document.querySelectorAll('.embed-season-pill').forEach(pill => {
+        pill.className = "embed-season-pill px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition bg-[#1e1e1e] text-zinc-400 hover:text-white";
+      });
+      const activeTab = document.getElementById('embed-season-tab-' + seasonName.replace(/\s+/g, '-'));
+      if (activeTab) {
+        activeTab.className = "embed-season-pill px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition bg-rose-600 text-white";
+      }
+
+      // Re-render episodes
+      const grid = document.getElementById('embed-episodes-grid');
+      grid.innerHTML = '';
+      const episodes = Object.keys(seasonsData[seasonName]);
+      episodes.forEach(epKey => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.onclick = () => playEmbedEpisode(seasonName, epKey);
+        btn.className = epKey === currentEpisode 
+          ? "p-2.5 rounded-xl text-xs font-bold text-center transition bg-rose-600 text-white shadow-md shadow-rose-600/30"
+          : "p-2.5 rounded-xl text-xs font-bold text-center transition bg-[#1c1c1c] text-zinc-300 hover:bg-zinc-800 hover:text-white border border-[#282828]";
+        btn.innerText = epKey;
+        grid.appendChild(btn);
+      });
+    }
+
+    function playEmbedEpisode(seasonName, epKey) {
+      if (!seasonsData || !seasonsData[seasonName] || !seasonsData[seasonName][epKey]) return;
+      currentSeason = seasonName;
+      currentEpisode = epKey;
+
+      const rawStream = seasonsData[seasonName][epKey];
+      const parsed = rawStream.split('|').map(s => s.trim()).filter(Boolean);
+      const newUrl = parsed[0] || rawStream;
+      const isEmbed = newUrl.includes('short.icu') || newUrl.includes('vidlink') || newUrl.includes('vidsrc') || newUrl.includes('streamtape') || newUrl.includes('/embed/');
+
+      toggleEpisodeDrawer();
+      loadEngine(newUrl, isEmbed);
+    }
+
+    // Auto-boot primary stream on load
+    if (currentUrl) {
+      loadEngine(currentUrl, currentIsEmbed);
+    }
+
+  
+    if (mediaTitle && mediaTitle !== 'Stream') {
+      let cleanSearchTarget = mediaTitle
+        .replace(/tagalog dubbed|tagdub|dubbed|1080p|720p|480p|hd|fhd|uhd/gi, '')
+        .replace(/[\(\)\[\]_\-\.]+/g, ' ')
+        .trim();
+
+      fetch('/api/subtitles/' + encodeURIComponent(cleanSearchTarget))
+        .then(res => res.json())
+        .then(data => {
+          if (data.success && data.subtitles && data.subtitles.length > 0 && artInstance) {
+            artInstance.setting.update({
+              width: 260,
+              html: '💬 CC (' + data.subtitles.length + ')',
+              tooltip: 'Manage Captions',
+              selector: [
+                { default: true, html: '❌ Cc Off', url: '' },
+                ...data.subtitles.map(s => ({
+                  html: s.name,
+                  url: s.url
+                })),
+                { html: '📁 Import File (.srt / .vtt)', url: 'import' }
+              ],
+              onSelect: function (item) {
+                if (item.url === 'import') {
+                  document.getElementById('subFileInput').click();
+                } else if (item.url) {
+                  artInstance.subtitle.switch(item.url, { name: item.html, type: 'vtt' });
+                  artInstance.subtitle.show = true;
+                  artInstance.notice.show = 'Subtitle: ' + item.html;
+                } else {
+                  artInstance.subtitle.show = false;
+                  artInstance.notice.show = 'Subtitles Off';
+                }
+                return item.html;
+              }
+            });
+            artInstance.notice.show = '💬 ' + data.subtitles.length + ' Subtitles Loaded';
+          }
+        }).catch(err => console.warn('Sub fetch error:', err));
+    }
+
+    // Local Subtitle Picker Event Listener
+    const subInput = document.getElementById('subFileInput');
+    if (subInput) {
+      subInput.addEventListener('change', function (e) {
+        const file = e.target.files[0];
+        if (file && artInstance) {
+          const fileUrl = URL.createObjectURL(file);
+          const ext = file.name.split('.').pop().toLowerCase();
+          artInstance.subtitle.switch(fileUrl, {
+            name: file.name,
+            type: ext === 'srt' ? 'srt' : 'vtt',
+          }).then(() => {
+            artInstance.subtitle.show = true;
+            artInstance.notice.show = 'Subtitle Loaded: ' + file.name;
+          });
+        }
+      });
+    }
+  </script>
+
+  <!-- Hidden Subtitle File Input -->
+  <input type="file" id="subFileInput" accept=".vtt,.srt" style="display:none;" />
+
+</body>
+</html>

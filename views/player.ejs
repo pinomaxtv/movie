@@ -1,0 +1,822 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title><%= pageTitle %></title>
+  <meta name="description" content="Streaming <%= media.title %> - Smart Dual Player (Artplayer & Embeds)">
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            bg: '#080808',
+            card: '#121212',
+            cardHover: '#171717',
+            border: '#262626',
+            accent: {
+              DEFAULT: '#e11d48',
+              hover: '#f43f5e',
+              glow: 'rgba(225, 29, 72, 0.25)',
+              dim: 'rgba(225, 29, 72, 0.1)'
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- HLS.js for Adaptive Stream Playback (.m3u8) -->
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+
+  <!-- DASH.js for MPEG-DASH Stream Playback (.mpd) -->
+  <script src="https://cdn.jsdelivr.net/npm/dashjs@latest/dist/dash.all.min.js"></script>
+
+  <!-- Artplayer.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/artplayer/dist/artplayer.js"></script>
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --bg: #080808;
+      --card: #121212;
+      --card-hover: #171717;
+      --border: #262626;
+      --border-hover: #3a3a3a;
+      --accent: #e11d48;
+      --text: #f5f5f5;
+      --text-dim: #a3a3a3;
+    }
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+    }
+    .artplayer-app {
+      width: 100%;
+      height: 100%;
+      background-color: #000000;
+    }
+    .bento-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      transition: all 0.2s ease-in-out;
+    }
+    .bento-card:hover {
+      border-color: var(--border-hover);
+    }
+    .bento-badge {
+      padding: 4px 8px;
+      border-radius: 6px;
+      background: #1a1a1a;
+      font-size: 11px;
+      color: #e5e5e5;
+      border: 1px solid var(--border);
+    }
+    .accent-dot {
+      width: 6px;
+      height: 6px;
+      background: var(--accent);
+      border-radius: 50%;
+      box-shadow: 0 0 8px var(--accent);
+    }
+    .card-title-bento {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-dim);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .art-video-player {
+      font-family: 'Inter', sans-serif !important;
+    }
+  </style>
+</head>
+<body class="bg-[#080808] text-[#f5f5f5] min-h-screen flex flex-col antialiased <%= embedMode ? 'p-0 m-0 overflow-hidden' : '' %>">
+
+  <% if (!embedMode) { %>
+    <!-- Bento Top Navigation Header -->
+    <header class="sticky top-0 z-40 border-b border-[#262626] bg-[#080808]/90 backdrop-blur-md">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
+        <a href="/" class="flex items-center gap-2.5 text-zinc-300 hover:text-white transition group">
+          <div class="p-2 rounded-xl bg-[#181818] border border-[#262626] group-hover:border-rose-500/50 group-hover:bg-rose-950/20 transition">
+            <i data-lucide="arrow-left" class="w-4 h-4 text-rose-500"></i>
+          </div>
+          <span class="text-xs font-semibold hidden sm:inline tracking-wide">HOME</span>
+        </a>
+
+        <!-- Media Title in Header -->
+        <div class="text-center truncate px-2 max-w-md">
+          <div class="card-title-bento justify-center mb-0.5" id="header-category-label">
+            <div class="accent-dot"></div> 
+            <%= mediaType === 'tv' ? `${media.nodeLabel || 'TV SERIES'} • ${currentSeason} ${currentEpisode}` : `${media.nodeLabel || 'MOVIE'} (${media.year})` %>
+          </div>
+          <h1 class="text-sm font-bold text-white truncate" id="header-media-title"><%= media.title %></h1>
+        </div>
+
+        <!-- Right Quick Actions -->
+        <div class="flex items-center gap-2">
+          <span class="hidden md:inline-flex items-center gap-1.5 bento-badge bg-rose-950/40 text-rose-300 border-rose-600/30 text-[10px] font-mono">
+            <span class="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse"></span>
+            FIREBASE RTDB
+          </span>
+          <a href="/admin" class="p-2 rounded-xl bg-[#181818] hover:bg-zinc-800 border border-[#262626] text-zinc-300 transition" title="Admin Stream Manager">
+            <i data-lucide="settings" class="w-4 h-4 text-rose-500"></i>
+          </a>
+          <button onclick="toggleShareModal()" class="p-2 rounded-xl bg-[#181818] hover:bg-zinc-800 border border-[#262626] text-zinc-300 transition" title="Share or Embed">
+            <i data-lucide="share-2" class="w-4 h-4"></i>
+          </button>
+          <a href="/" class="px-3.5 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold shadow-md shadow-rose-600/30 transition flex items-center gap-1.5">
+            <i data-lucide="compass" class="w-3.5 h-3.5"></i>
+            Browse
+          </a>
+        </div>
+      </div>
+    </header>
+  <% } %>
+
+  <!-- Main Player Container -->
+  <main class="<%= embedMode ? 'w-screen h-screen' : 'flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6' %>">
+
+    <!-- Smart Dual Player Frame -->
+    <div class="relative w-full <%= embedMode ? 'h-full rounded-none' : 'aspect-video max-h-[78vh] rounded-2xl overflow-hidden shadow-2xl border border-[#262626] bg-[#000000]' %>">
+      
+      <!-- 1. Artplayer Container (For direct MP4 / HLS streams) -->
+      <div id="artplayer-container" class="artplayer-app w-full h-full"></div>
+
+      <!-- 2. Responsive iFrame Player (For Web Embeds like VidLink, Short.ICU, VidSrc, Streamtape) -->
+      <div id="iframe-container" class="w-full h-full hidden bg-black absolute inset-0 z-10">
+        <iframe 
+          id="active-player-iframe" 
+          src="" 
+          class="w-full h-full border-0" 
+          allow="autoplay; fullscreen; picture-in-picture; encrypted-media; gyroscope; accelerometer" 
+          allowfullscreen
+          referrerpolicy="no-referrer"
+        ></iframe>
+      </div>
+
+      <!-- Player Loading Overlay -->
+      <div id="player-loading" class="absolute inset-0 bg-[#080808] flex flex-col items-center justify-center gap-3 z-20 transition-opacity duration-300 pointer-events-none">
+        <div class="relative w-12 h-12">
+          <div class="w-12 h-12 rounded-full border-2 border-rose-500/20 border-t-rose-500 animate-spin"></div>
+          <i data-lucide="play" class="w-5 h-5 text-rose-500 absolute inset-0 m-auto"></i>
+        </div>
+        <span class="text-xs font-medium text-zinc-400 font-mono" id="player-status-text">INITIALIZING DUAL PLAYER ENGINE...</span>
+      </div>
+
+      <!-- Engine Badge Overlay -->
+      <div class="absolute top-3 right-3 z-30 pointer-events-none">
+        <span id="player-engine-badge" class="bento-badge bg-black/70 backdrop-blur-md text-[10px] font-mono border-zinc-700 text-rose-300 flex items-center gap-1.5 shadow-lg">
+          <span class="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse"></span>
+          <span id="player-engine-name">ARTPLAYER HTML5</span>
+        </span>
+      </div>
+
+    </div>
+
+    <% if (!embedMode) { %>
+      <!-- Dynamic Stream Server Switcher Bento Card -->
+      <div class="bento-card p-5 space-y-4">
+        
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#262626] pb-4">
+          <div class="flex items-center gap-2">
+            <div class="card-title-bento"><div class="accent-dot"></div> ACTIVE STREAM SERVERS</div>
+            <span class="bento-badge text-[10px] font-mono text-zinc-400" id="server-count-badge">
+              <%= servers.length %> Mirror Sources
+            </span>
+          </div>
+
+          <!-- Direct Download & Embed actions -->
+          <div class="flex items-center gap-2">
+            <button id="external-download-btn" onclick="triggerDirectDownload()" class="px-3.5 py-1.5 rounded-xl bg-[#181818] hover:bg-zinc-800 text-zinc-200 text-xs font-semibold border border-[#262626] transition flex items-center gap-1.5 cursor-pointer">
+              <i data-lucide="download" class="w-3.5 h-3.5 text-rose-500"></i>
+              Download / Open
+            </button>
+            <button onclick="toggleEmbedModal()" class="px-3.5 py-1.5 rounded-xl bg-rose-600/15 hover:bg-rose-600/25 text-rose-300 text-xs font-semibold border border-rose-500/30 transition flex items-center gap-1.5 cursor-pointer">
+              <i data-lucide="code" class="w-3.5 h-3.5"></i>
+              Embed Code
+            </button>
+          </div>
+        </div>
+
+        <!-- Dynamic Server Switcher Buttons Grid -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3" id="server-buttons-grid">
+          <% servers.forEach(function(srv, index) { %>
+            <button 
+              type="button"
+              onclick="selectStreamServer('<%= srv.url %>', '<%= srv.name %>', <%= index %>, <%= srv.isEmbed %>)" 
+              id="server-btn-<%= index %>"
+              class="server-pill text-left p-3 rounded-xl border transition flex items-center justify-between cursor-pointer <%= index === 0 ? 'bg-rose-600/10 border-rose-600 text-white shadow-md shadow-rose-600/10 ring-1 ring-rose-500/50' : 'bg-[#181818] border-[#262626] text-zinc-300 hover:bg-zinc-800 hover:text-white' %>"
+            >
+              <div class="flex items-center gap-2.5 truncate">
+                <span class="w-2.5 h-2.5 rounded-full <%= index === 0 ? 'bg-rose-500 shadow-[0_0_8px_#e11d48] animate-pulse' : 'bg-zinc-600' %>" id="server-dot-<%= index %>"></span>
+                <div class="truncate">
+                  <div class="text-xs font-bold truncate"><%= srv.name %></div>
+                  <div class="text-[10px] text-zinc-400"><%= srv.isEmbed ? 'Web Embed Engine' : 'HTML5 Artplayer' %></div>
+                </div>
+              </div>
+              <span class="bento-badge font-mono whitespace-nowrap text-[10px]"><%= srv.badge || 'HD' %></span>
+            </button>
+          <% }); %>
+        </div>
+
+        <!-- Custom Video URL Box -->
+        <div class="pt-2 flex flex-col sm:flex-row items-center gap-2 text-xs">
+          <input 
+            type="url" 
+            id="custom-stream-box" 
+            placeholder="Paste any direct MP4 / HLS (.m3u8) or Web Embed (VidLink / Short.ICU) URL to play here..." 
+            class="flex-1 w-full px-3.5 py-2.5 rounded-xl bg-[#181818] border border-[#262626] text-white placeholder-zinc-500 focus:outline-none focus:border-rose-500 text-xs"
+          >
+          <button 
+            type="button" 
+            onclick="applyCustomStreamUrl()" 
+            class="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-[#181818] hover:bg-zinc-800 text-zinc-200 font-semibold border border-[#262626] transition whitespace-nowrap flex items-center justify-center gap-1.5 cursor-pointer"
+          >
+            <i data-lucide="play" class="w-3.5 h-3.5 text-rose-500 fill-current"></i>
+            Load URL
+          </button>
+        </div>
+
+      </div>
+
+      <!-- TV Series Season & Episode Selector Bento Bar (If TV Show) -->
+      <% if (mediaType === 'tv' && seasonsData) { %>
+        <div class="bento-card p-5 space-y-4">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#262626] pb-3">
+            <div>
+              <div class="card-title-bento"><div class="accent-dot"></div> SEASON &amp; EPISODE SELECTOR</div>
+              <h2 class="text-sm font-bold text-white mt-1" id="active-episode-heading">
+                Now Playing: <%= currentSeason %> - <%= currentEpisode %>
+              </h2>
+            </div>
+
+            <!-- Season Selector Dropdown / Pills -->
+            <div class="flex items-center gap-2">
+              <label class="text-xs text-zinc-400 font-medium">Season:</label>
+              <select 
+                id="season-selector-dropdown" 
+                onchange="handleSeasonChange(this.value)"
+                class="px-3 py-1.5 rounded-xl bg-[#181818] border border-[#262626] text-xs font-semibold text-white focus:outline-none focus:border-rose-500 cursor-pointer"
+              >
+                <% (seasonNames || []).forEach(function(sName) { %>
+                  <option value="<%= sName %>" <%= sName === currentSeason ? 'selected' : '' %>><%= sName %></option>
+                <% }); %>
+              </select>
+            </div>
+          </div>
+
+          <!-- Episode Buttons Grid -->
+          <div class="space-y-2">
+            <div class="text-xs font-semibold text-zinc-400">Select Episode:</div>
+            <div class="flex flex-wrap gap-2 pt-1" id="episodes-buttons-container">
+              <% (episodeKeys || []).forEach(function(epKey) { %>
+                <button 
+                  type="button"
+                  onclick="selectEpisode('<%= currentSeason %>', '<%= epKey %>')"
+                  id="ep-btn-<%= epKey.replace(/\s+/g, '-') %>"
+                  class="px-3.5 py-2 rounded-xl text-xs font-semibold transition cursor-pointer <%= epKey === currentEpisode ? 'bg-rose-600 text-white shadow-md shadow-rose-600/30 ring-1 ring-rose-400' : 'bg-[#181818] text-zinc-300 hover:bg-zinc-800 hover:text-white border border-[#262626]' %>"
+                >
+                  <%= epKey %>
+                </button>
+              <% }); %>
+            </div>
+          </div>
+        </div>
+      <% } %>
+
+      <!-- Media Synopsis & Firebase Specs Bento Grid -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        
+        <!-- Left: Poster & Quick Specs (4 Cols) -->
+        <div class="lg:col-span-4 bento-card p-5 space-y-4">
+          <div class="card-title-bento"><div class="accent-dot"></div> POSTER &amp; METADATA</div>
+          <div class="aspect-[2/3] rounded-xl overflow-hidden bg-[#181818] border border-[#262626]">
+            <img src="<%= media.image || media.poster %>" alt="<%= media.title %>" class="w-full h-full object-cover" onerror="this.src='https://images.unsplash.com/photo-1536440136628-849c177e76a1?auto=format&fit=crop&w=500&q=80'">
+          </div>
+
+          <div class="space-y-2 text-xs">
+            <div class="flex items-center justify-between p-2.5 rounded-xl bg-[#181818] border border-[#262626]">
+              <span class="text-zinc-400">Rating</span>
+              <span class="font-bold text-amber-400 flex items-center gap-1">
+                <i data-lucide="star" class="w-3.5 h-3.5 fill-amber-400 text-amber-400"></i>
+                <%= media.rating %> / 10
+              </span>
+            </div>
+
+            <div class="flex items-center justify-between p-2.5 rounded-xl bg-[#181818] border border-[#262626]">
+              <span class="text-zinc-400">Release Year</span>
+              <span class="font-semibold text-zinc-200 font-mono"><%= media.year %></span>
+            </div>
+
+            <div class="flex items-center justify-between p-2.5 rounded-xl bg-[#181818] border border-[#262626]">
+              <span class="text-zinc-400">Database Node</span>
+              <span class="font-mono text-[10px] text-rose-400"><%= media.node %></span>
+            </div>
+
+            <% if (media.trailer) { %>
+              <a href="<%= media.trailer %>" target="_blank" rel="noopener noreferrer" class="w-full py-2 px-3 rounded-xl bg-rose-600/10 hover:bg-rose-600/20 text-rose-400 border border-rose-500/20 flex items-center justify-center gap-1.5 font-medium transition">
+                <i data-lucide="youtube" class="w-3.5 h-3.5"></i>
+                Watch Official Trailer
+              </a>
+            <% } %>
+          </div>
+        </div>
+
+        <!-- Right: Synopsis & Full Details (8 Cols) -->
+        <div class="lg:col-span-8 bento-card p-6 space-y-6">
+          <div class="border-b border-[#262626] pb-4">
+            <div class="card-title-bento mb-1"><div class="accent-dot"></div> OVERVIEW</div>
+            <h2 class="text-xl font-bold text-white"><%= media.title %></h2>
+            <div class="flex flex-wrap items-center gap-2 mt-2">
+              <span class="bento-badge font-mono text-rose-400 border-rose-500/30"><%= media.category || 'General' %></span>
+              <span class="bento-badge text-zinc-300"><%= media.genre %></span>
+              <% if (media.isVip) { %>
+                <span class="bento-badge bg-amber-950/30 text-amber-300 border-amber-500/30 font-mono">👑 VIP CONTENT</span>
+              <% } %>
+            </div>
+          </div>
+
+          <!-- Description text -->
+          <div>
+            <h3 class="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">Synopsis</h3>
+            <p class="text-sm text-zinc-300 leading-relaxed"><%= media.description %></p>
+          </div>
+
+          <!-- Stream Information -->
+          <div class="p-4 rounded-xl bg-[#181818] border border-[#262626] space-y-2">
+            <div class="flex items-center justify-between text-xs">
+              <span class="font-semibold text-zinc-300">Smart Dual Player Capability</span>
+              <span class="text-emerald-400 font-mono text-[10px]">● READY</span>
+            </div>
+            <p class="text-[11px] text-zinc-400 leading-normal">
+              StreamPortal automatically recognizes direct video URLs (.mp4 / .m3u8) to load into the Artplayer engine with custom playback controls, while delegating web embeds (VidLink, Short.ICU, VidSrc) into high-performance sandboxed frames.
+            </p>
+          </div>
+        </div>
+
+      </div>
+
+    <% } %>
+
+  </main>
+
+  <!-- Embed / Share Snippet Modal Dialog -->
+  <div id="embed-modal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 hidden">
+    <div class="bento-card p-6 max-w-lg w-full space-y-4 bg-[#121212] border-[#2b2b2b] shadow-2xl">
+      <div class="flex items-center justify-between border-b border-[#262626] pb-3">
+        <div class="card-title-bento text-rose-400"><div class="accent-dot"></div> EMBED CODE SNIPPET</div>
+        <button onclick="toggleEmbedModal()" class="text-zinc-400 hover:text-white transition">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+      <p class="text-xs text-zinc-400">
+        Copy this iframe tag to embed this video player on any website or blog:
+      </p>
+      <textarea id="embed-modal-textarea" readonly class="w-full h-24 p-3 rounded-xl bg-[#181818] border border-[#262626] text-xs font-mono text-rose-300 select-all focus:outline-none"></textarea>
+      <div class="flex justify-end gap-2">
+        <button onclick="copyModalEmbedCode()" id="modal-copy-btn" class="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold transition flex items-center gap-1.5">
+          <i data-lucide="copy" class="w-4 h-4"></i>
+          Copy Iframe Snippet
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Smart Dual Video Player Script -->
+  <script>
+    lucide.createIcons();
+
+    // Server EJS Data Variables
+    const initialServers = <%- JSON.stringify(servers || []) %>;
+    const mediaTitle = <%- JSON.stringify(media.title || 'Media') %>;
+    const mediaPoster = <%- JSON.stringify(media.backdrop || media.image || media.poster || '') %>;
+    const mediaType = <%- JSON.stringify(mediaType || 'movie') %>;
+    const seasonsData = <%- JSON.stringify(seasonsData || null) %>;
+    let currentSeason = <%- JSON.stringify(currentSeason || '') %>;
+    let currentEpisode = <%- JSON.stringify(currentEpisode || '') %>;
+
+    let activeServers = initialServers;
+    let currentServerIndex = 0;
+    let currentStreamUrl = activeServers.length > 0 ? activeServers[0].url : '';
+    let artInstance = null;
+
+    /**
+     * Determine if a stream URL is an embed or direct video file
+     */
+    function isEmbedUrl(url) {
+      if (!url) return false;
+      const u = url.toLowerCase();
+      if (
+        u.includes('.mp4') ||
+        u.includes('.m3u8') ||
+        u.includes('.webm') ||
+        u.includes('.ogg') ||
+        u.includes('commondatastorage.googleapis.com')
+      ) {
+        return false;
+      }
+      return true;
+    }
+
+    /**
+     * Switch Stream Server in the Smart Dual Player
+     */
+    function selectStreamServer(url, name, index, isEmbed) {
+      currentServerIndex = index;
+      currentStreamUrl = url;
+
+      // Update UI button active states
+      const buttons = document.querySelectorAll('.server-pill');
+      buttons.forEach((btn, idx) => {
+        const dot = document.getElementById(`server-dot-${idx}`);
+        if (idx === index) {
+          btn.className = "server-pill text-left p-3 rounded-xl border transition flex items-center justify-between cursor-pointer bg-rose-600/10 border-rose-600 text-white shadow-md shadow-rose-600/10 ring-1 ring-rose-500/50";
+          if (dot) dot.className = "w-2.5 h-2.5 rounded-full bg-rose-500 shadow-[0_0_8px_#e11d48] animate-pulse";
+        } else {
+          btn.className = "server-pill text-left p-3 rounded-xl border transition flex items-center justify-between cursor-pointer bg-[#181818] border-[#262626] text-zinc-300 hover:bg-zinc-800 hover:text-white";
+          if (dot) dot.className = "w-2.5 h-2.5 rounded-full bg-zinc-600";
+        }
+      });
+
+      // Load into the appropriate engine
+      loadPlayerEngine(url, name, isEmbed);
+    }
+
+    /**
+     * Load into Artplayer or iFrame based on URL type
+     */
+    function loadPlayerEngine(url, name, isEmbed) {
+      const artContainer = document.getElementById('artplayer-container');
+      const iframeContainer = document.getElementById('iframe-container');
+      const iframeElement = document.getElementById('active-player-iframe');
+      const engineBadgeText = document.getElementById('player-engine-name');
+      const loader = document.getElementById('player-loading');
+
+      if (loader) {
+        loader.classList.remove('opacity-0', 'pointer-events-none');
+      }
+
+      // Comprehensive auto-detection for web embeds vs direct stream engines
+      const detectedEmbed = isEmbed || 
+        url.includes('short.icu') || 
+        url.includes('vidlink') || 
+        url.includes('vidsrc') || 
+        url.includes('streamtape') || 
+        url.includes('vidfast') || 
+        url.includes('multiembed') || 
+        url.includes('dood') || 
+        url.includes('filemoon') || 
+        url.includes('streamwish') || 
+        url.includes('/embed/') || 
+        url.includes('/e/');
+
+      if (detectedEmbed) {
+        // 1. EMBED MODE
+        engineBadgeText.innerText = 'IFRAME EMBED';
+
+        // Pause / Destroy existing Artplayer if active
+        if (artInstance) {
+          try {
+            artInstance.pause();
+          } catch(e) {}
+        }
+        artContainer.classList.add('hidden');
+        iframeContainer.classList.remove('hidden');
+
+        iframeElement.src = url;
+        iframeElement.onload = () => {
+          if (loader) loader.classList.add('opacity-0', 'pointer-events-none');
+        };
+
+        // Fallback hide loader
+        setTimeout(() => {
+          if (loader) loader.classList.add('opacity-0', 'pointer-events-none');
+        }, 800);
+
+      } else {
+        // 2. DIRECT ARTPLAYER HTML5 / HLS / DASH MODE
+        if (url.includes('.m3u8')) {
+          engineBadgeText.innerText = 'ARTPLAYER (HLS)';
+        } else if (url.includes('.mpd')) {
+          engineBadgeText.innerText = 'ARTPLAYER (DASH)';
+        } else if (url.includes('/stream/')) {
+          engineBadgeText.innerText = 'MTPROTO 512KB STREAM';
+        } else {
+          engineBadgeText.innerText = 'ARTPLAYER (DIRECT MP4)';
+        }
+
+        iframeElement.src = '';
+        iframeContainer.classList.add('hidden');
+        artContainer.classList.remove('hidden');
+
+        if (!artInstance) {
+          initArtplayer(url);
+        } else {
+          artInstance.switchUrl(url).then(() => {
+            if (loader) loader.classList.add('opacity-0', 'pointer-events-none');
+          }).catch(() => {
+            // Re-init if switchUrl fails
+            initArtplayer(url);
+          });
+        }
+      }
+    }
+
+    /**
+     * Initialize Artplayer
+     */
+    function initArtplayer(streamUrl) {
+      const container = document.getElementById('artplayer-container');
+      const loader = document.getElementById('player-loading');
+
+      if (artInstance && artInstance.destroy) {
+        try {
+          artInstance.destroy();
+        } catch(e) {}
+      }
+
+      artInstance = new Artplayer({
+        container: container,
+        url: streamUrl,
+        poster: mediaPoster,
+        title: mediaTitle,
+        volume: 0.75,
+        isLive: false,
+        muted: false,
+        autoplay: false,
+        pip: true,
+        autoSize: false,
+        autoMini: true,
+        screenshot: true,
+        setting: true,
+        loop: false,
+        playbackRate: true,
+        aspectRatio: true,
+        fullscreen: true,
+        fullscreenWeb: true,
+        miniProgressBar: true,
+        playsInline: true,
+        airplay: true,
+        theme: '#e11d48',
+        lang: 'en',
+        moreVideoAttr: {
+          crossOrigin: 'anonymous',
+          preload: 'metadata'
+        },
+        playbackRates: [0.5, 0.75, 1, 1.25, 1.5, 2],
+        customType: {
+          m3u8: function (video, url, artObj) {
+            if (window.Hls && Hls.isSupported()) {
+              if (artObj.hls) artObj.hls.destroy();
+              const hls = new Hls({ enableWorker: true, lowLatencyMode: true });
+              hls.loadSource(url);
+              hls.attachMedia(video);
+              artObj.hls = hls;
+              artObj.on('destroy', () => hls.destroy());
+            } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+              video.src = url;
+            }
+          },
+          mpd: function (video, url, artObj) {
+            if (window.dashjs) {
+              if (artObj.dash) artObj.dash.reset();
+              const dash = dashjs.MediaPlayer().create();
+              dash.initialize(video, url, true);
+              artObj.dash = dash;
+              artObj.on('destroy', () => dash.reset());
+            }
+          }
+        }
+      });
+
+      artInstance.on('ready', () => {
+        if (loader) loader.classList.add('opacity-0', 'pointer-events-none');
+      });
+
+      artInstance.on('error', (err) => {
+        console.warn('Artplayer playback error:', err);
+        if (loader) loader.classList.add('opacity-0', 'pointer-events-none');
+        if (artInstance && artInstance.notice) {
+          artInstance.notice.show = 'Stream playback error. Try switching to a backup server.';
+        }
+      });
+    }
+
+    /**
+     * TV Series: Handle Season Selection
+     */
+    function handleSeasonChange(newSeason) {
+      if (!seasonsData || !seasonsData[newSeason]) return;
+      currentSeason = newSeason;
+
+      const seasonObj = seasonsData[newSeason];
+      const episodes = Object.keys(seasonObj);
+      const container = document.getElementById('episodes-buttons-container');
+      container.innerHTML = '';
+
+      episodes.forEach((epKey, idx) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.onclick = () => selectEpisode(currentSeason, epKey);
+        btn.id = `ep-btn-${epKey.replace(/\s+/g, '-')}`;
+        btn.className = (idx === 0) 
+          ? 'px-3.5 py-2 rounded-xl text-xs font-semibold transition cursor-pointer bg-rose-600 text-white shadow-md shadow-rose-600/30 ring-1 ring-rose-400'
+          : 'px-3.5 py-2 rounded-xl text-xs font-semibold transition cursor-pointer bg-[#181818] text-zinc-300 hover:bg-zinc-800 hover:text-white border border-[#262626]';
+        btn.innerText = epKey;
+        container.appendChild(btn);
+      });
+
+      if (episodes.length > 0) {
+        selectEpisode(newSeason, episodes[0]);
+      }
+    }
+
+    /**
+     * TV Series: Select and switch episode
+     */
+    function selectEpisode(season, episode) {
+      if (!seasonsData || !seasonsData[season] || !seasonsData[season][episode]) return;
+      currentSeason = season;
+      currentEpisode = episode;
+
+      // Update heading
+      const heading = document.getElementById('active-episode-heading');
+      if (heading) {
+        heading.innerText = `Now Playing: ${season} - ${episode}`;
+      }
+
+      // Update active button highlights
+      const epButtons = document.querySelectorAll('#episodes-buttons-container button');
+      epButtons.forEach(btn => {
+        if (btn.innerText.trim() === episode.trim()) {
+          btn.className = 'px-3.5 py-2 rounded-xl text-xs font-semibold transition cursor-pointer bg-rose-600 text-white shadow-md shadow-rose-600/30 ring-1 ring-rose-400';
+        } else {
+          btn.className = 'px-3.5 py-2 rounded-xl text-xs font-semibold transition cursor-pointer bg-[#181818] text-zinc-300 hover:bg-zinc-800 hover:text-white border border-[#262626]';
+        }
+      });
+
+      // Parse episode stream string
+      const rawString = seasonsData[season][episode];
+      const parsedServers = parseEpisodeStreams(rawString, `${mediaTitle} - ${season} ${episode}`);
+      activeServers = parsedServers;
+
+      // Re-render server buttons
+      renderServerButtons(parsedServers);
+
+      // Automatically play primary server
+      if (parsedServers.length > 0) {
+        selectStreamServer(parsedServers[0].url, parsedServers[0].name, 0, parsedServers[0].isEmbed);
+      }
+    }
+
+    /**
+     * Parse episode stream string with pipe delimiters
+     */
+    function parseEpisodeStreams(streamStr, title) {
+      if (!streamStr || typeof streamStr !== 'string') {
+        return [{ name: 'Server 1 (Primary)', url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4', badge: 'MP4 HD', isEmbed: false }];
+      }
+
+      const links = streamStr.split('|').map(s => s.trim()).filter(Boolean);
+      if (links.length === 0) {
+        return [{ name: 'Server 1 (Primary)', url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4', badge: 'MP4 HD', isEmbed: false }];
+      }
+
+      return links.map((url, idx) => {
+        const isEmbed = isEmbedUrl(url);
+        let name = `Server ${idx + 1}`;
+        let badge = 'HD Stream';
+
+        if (url.includes('short.icu')) {
+          name = `Server ${idx + 1} (Short.ICU)`;
+          badge = 'Embed';
+        } else if (url.includes('vidlink.pro')) {
+          name = `Server ${idx + 1} (VidLink)`;
+          badge = 'Multi-Sub';
+        } else if (url.includes('vidsrc')) {
+          name = `Server ${idx + 1} (VidSrc)`;
+          badge = 'VIP';
+        } else if (url.includes('.m3u8')) {
+          name = `Server ${idx + 1} (HLS)`;
+          badge = 'Adaptive';
+        } else if (url.includes('.mp4')) {
+          name = `Server ${idx + 1} (MP4)`;
+          badge = 'Direct';
+        }
+
+        return { name, url, badge, isEmbed };
+      });
+    }
+
+    /**
+     * Dynamically re-render server buttons
+     */
+    function renderServerButtons(servers) {
+      const grid = document.getElementById('server-buttons-grid');
+      const badge = document.getElementById('server-count-badge');
+      if (badge) badge.innerText = `${servers.length} Mirror Sources`;
+      if (!grid) return;
+
+      grid.innerHTML = '';
+      servers.forEach((srv, idx) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.onclick = () => selectStreamServer(srv.url, srv.name, idx, srv.isEmbed);
+        btn.id = `server-btn-${idx}`;
+        btn.className = (idx === 0)
+          ? 'server-pill text-left p-3 rounded-xl border transition flex items-center justify-between cursor-pointer bg-rose-600/10 border-rose-600 text-white shadow-md shadow-rose-600/10 ring-1 ring-rose-500/50'
+          : 'server-pill text-left p-3 rounded-xl border transition flex items-center justify-between cursor-pointer bg-[#181818] border-[#262626] text-zinc-300 hover:bg-zinc-800 hover:text-white';
+
+        btn.innerHTML = `
+          <div class="flex items-center gap-2.5 truncate">
+            <span class="w-2.5 h-2.5 rounded-full ${idx === 0 ? 'bg-rose-500 shadow-[0_0_8px_#e11d48] animate-pulse' : 'bg-zinc-600'}" id="server-dot-${idx}"></span>
+            <div class="truncate">
+              <div class="text-xs font-bold truncate">${srv.name}</div>
+              <div class="text-[10px] text-zinc-400">${srv.isEmbed ? 'Web Embed Engine' : 'HTML5 Artplayer'}</div>
+            </div>
+          </div>
+          <span class="bento-badge font-mono whitespace-nowrap text-[10px]">${srv.badge || 'HD'}</span>
+        `;
+        grid.appendChild(btn);
+      });
+    }
+
+    /**
+     * Apply custom stream URL on-the-fly
+     */
+    function applyCustomStreamUrl() {
+      const input = document.getElementById('custom-stream-box');
+      if (!input || !input.value.trim()) return;
+      const url = input.value.trim();
+      const isEmbed = isEmbedUrl(url);
+      loadPlayerEngine(url, 'Custom Stream Source', isEmbed);
+    }
+
+    /**
+     * Direct Download Trigger
+     */
+    function triggerDirectDownload() {
+      window.open(currentStreamUrl, '_blank');
+    }
+
+    /**
+     * Share / Embed Modal
+     */
+    function toggleEmbedModal() {
+      const modal = document.getElementById('embed-modal');
+      const textarea = document.getElementById('embed-modal-textarea');
+      if (modal) {
+        const isHidden = modal.classList.contains('hidden');
+        if (isHidden) {
+          const origin = window.location.origin;
+          const embedUrl = `${origin}${window.location.pathname}?embed=true`;
+          textarea.value = `<iframe src="${embedUrl}" width="100%" height="100%" frameborder="0" allowfullscreen allow="autoplay; fullscreen; picture-in-picture"></iframe>`;
+          modal.classList.remove('hidden');
+        } else {
+          modal.classList.add('hidden');
+        }
+      }
+    }
+
+    function toggleShareModal() {
+      toggleEmbedModal();
+    }
+
+    function copyModalEmbedCode() {
+      const textarea = document.getElementById('embed-modal-textarea');
+      navigator.clipboard.writeText(textarea.value).then(() => {
+        const btn = document.getElementById('modal-copy-btn');
+        btn.innerHTML = '<i data-lucide="check" class="w-4 h-4 text-rose-400"></i> Copied!';
+        lucide.createIcons();
+        setTimeout(() => {
+          btn.innerHTML = '<i data-lucide="copy" class="w-4 h-4"></i> Copy Iframe Snippet';
+          lucide.createIcons();
+        }, 2000);
+      });
+    }
+
+    // Initialize player on page load
+    document.addEventListener('DOMContentLoaded', () => {
+      if (activeServers.length > 0) {
+        selectStreamServer(activeServers[0].url, activeServers[0].name, 0, activeServers[0].isEmbed);
+      }
+    });
+  </script>
+</body>
+</html>

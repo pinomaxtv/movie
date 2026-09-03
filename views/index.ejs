@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="tl" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title><%= typeof pageTitle !== 'undefined' ? pageTitle : 'PINOMAX - Streaming Portal' %></title>
+  
+  <!-- Telegram WebApp SDK -->
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+
+  <!-- Tailwind CSS & Lucide Icons -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
+
+  <style>
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      background-color: #0c0d12;
+      color: #f1f3f7;
+    }
+    .card-movie {
+      background: #141721;
+      border: 1px solid #202433;
+      border-radius: 16px;
+      transition: all 0.2s ease;
+    }
+    .card-movie:active {
+      transform: scale(0.98);
+    }
+  </style>
+</head>
+<body class="bg-[#0c0d12] text-zinc-100 min-h-screen flex flex-col antialiased">
+
+  <!-- TOP HEADER -->
+  <header class="sticky top-0 z-40 border-b border-[#202433] bg-[#0c0d12]/95 backdrop-blur-md">
+    <div class="max-w-md mx-auto px-4 h-14 flex items-center justify-between gap-2">
+      
+      <a href="/" class="flex items-center gap-2">
+        <span class="text-xl">🎬</span>
+        <span class="text-base font-black tracking-wider text-white">
+          PINO<span class="text-rose-500">MAX</span>
+        </span>
+      </a>
+
+      <div class="flex items-center gap-2">
+        <button onclick="openVipModal('donate')" class="px-3 py-1 rounded-full bg-gradient-to-r from-amber-400 to-amber-500 text-black font-extrabold text-[11px] shadow-md flex items-center gap-1">
+          <span>💎</span> VIP / DONATE
+        </button>
+        <span class="px-2 py-0.5 rounded-full bg-[#181c28] border border-[#262c3f] text-[10px] font-mono text-zinc-400">
+          <%= typeof totalCount !== 'undefined' ? totalCount : 30 %> Titles
+        </span>
+      </div>
+
+    </div>
+  </header>
+
+  <!-- MAIN LIST CONTAINER (HORIZONTAL CARDS NAKAPILA PABABA) -->
+  <main class="flex-1 max-w-md w-full mx-auto px-4 py-4 space-y-4">
+
+    <!-- SEARCH BAR -->
+    <div class="relative">
+      <i data-lucide="search" class="w-4 h-4 text-zinc-500 absolute left-3.5 top-1/2 -translate-y-1/2"></i>
+      <input 
+        type="text" 
+        id="searchInput"
+        oninput="liveFilterMovies()"
+        placeholder="Maghanap ng pelikula, serye..." 
+        autocomplete="off"
+        class="w-full pl-10 pr-4 py-2.5 rounded-xl bg-[#141721] border border-[#202433] text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-rose-500"
+      >
+    </div>
+
+    <!-- LISTAHAN NG MGA PELIKULA -->
+    <div id="moviesContainer" class="space-y-3">
+      <% 
+        const listMovies = (typeof tagalogMovies !== 'undefined' ? tagalogMovies : []).concat(typeof tagalogSeries !== 'undefined' ? tagalogSeries : (typeof movies !== 'undefined' ? movies : []));
+        if (listMovies.length === 0) { 
+      %>
+        <div id="noMoviesMsg" class="p-6 text-center text-xs text-zinc-500 bg-[#141721] rounded-xl border border-[#202433]">
+          Walang nahanap na pelikula.
+        </div>
+      <% } %>
+
+      <% listMovies.forEach(function(item) { %>
+        <div class="card-movie p-3 flex items-center justify-between gap-3" data-title="<%= (item.title || '').toLowerCase() %>">
+          
+          <!-- THUMBNAIL SA KALIWA -->
+          <div class="w-20 h-24 rounded-lg bg-[#1c202d] overflow-hidden flex-shrink-0 relative border border-[#262c3f]">
+            <% if (item.image) { %>
+              <img src="<%= item.image %>" alt="<%= item.title %>" class="w-full h-full object-cover" loading="lazy">
+            <% } else { %>
+              <div class="w-full h-full flex items-center justify-center text-2xl text-zinc-600">🎬</div>
+            <% } %>
+          </div>
+
+          <!-- DETALYE SA GITNA -->
+          <div class="flex-1 min-w-0 space-y-1">
+            <h3 class="text-xs font-bold text-white truncate" title="<%= item.title %>">
+              <%= item.title %>
+            </h3>
+
+            <!-- 🆔 ETO ANG IDADAGDAG (FILE ID) -->
+            <div class="flex items-center gap-1 text-[9px] font-mono text-zinc-400">
+              <span class="text-rose-400 font-bold">ID:</span>
+              <span class="truncate select-all bg-[#0c0d12] px-1.5 py-0.5 rounded border border-[#202433] text-zinc-300">
+                <%= item.id || item.node || 'N/A' %>
+              </span>
+            </div>
+
+            <div class="flex items-center gap-1.5 flex-wrap text-[9px] font-semibold">
+              <span class="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                ⭐ <%= item.rating || '8.5' %>
+              </span>
+              <span class="px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-300 border border-blue-500/30 uppercase">
+                <%= item.genre || 'MOVIE' %>
+              </span>
+              <span class="px-1.5 py-0.5 rounded bg-[#1e2333] text-zinc-400">
+                <%= item.year || '2024' %>
+              </span>
+            </div>
+
+            <p class="text-[10px] text-zinc-400">📦 <%= item.size || 'HD Stream' %></p>
+          </div>
+
+          <!-- RED PLAY BUTTON SA KANAN -->
+          <div class="flex-shrink-0">
+            <button 
+              type="button"
+              onclick="handlePlayClick('<%= item.id || item.node %>')"
+              class="px-4 py-2 rounded-xl bg-rose-600 active:bg-rose-700 text-white text-xs font-extrabold shadow-md flex items-center gap-1 hover:bg-rose-500 transition cursor-pointer"
+            >
+              <i data-lucide="play" class="w-3.5 h-3.5 fill-current"></i>
+              <span>PLAY</span>
+            </button>
+          </div>
+
+        </div>
+      <% }); %>
+    </div>
+
+  </main>
+
+  <!-- ========================================================================= -->
+  <!-- VIP & PAYMENT MODAL -->
+  <!-- ========================================================================= -->
+  <div id="vipPaymentModal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden items-center justify-center p-4">
+    <div class="bg-[#141721] border border-[#262c3f] rounded-2xl w-full max-w-sm p-5 shadow-2xl space-y-4 text-white">
+      
+      <div class="flex items-center justify-between border-b border-[#202433] pb-2">
+        <h3 class="text-xs font-bold text-amber-400 uppercase tracking-wide">👑 VIP Access &amp; Support</h3>
+        <button onclick="closeVipModal()" class="text-zinc-400 hover:text-white">&times;</button>
+      </div>
+
+      <!-- Tabs (Donate ₱5 vs Plans) -->
+      <div class="grid grid-cols-2 gap-2 bg-[#0c0d12] p-1 rounded-xl">
+        <button id="tabDonateBtn" onclick="switchPlanTab('donate')" class="py-1 text-xs font-bold rounded-lg bg-amber-500 text-black">
+          ❤️ Donate (₱5)
+        </button>
+        <button id="tabPlansBtn" onclick="switchPlanTab('plans')" class="py-1 text-xs font-semibold rounded-lg text-zinc-400">
+          👑 VIP Plans
+        </button>
+      </div>
+
+      <!-- Donate Box -->
+      <div id="donateSection" class="p-3 rounded-xl border border-amber-500/30 bg-amber-950/20 flex items-center justify-between">
+        <div>
+          <h4 class="text-xs font-bold">Donate sa Server</h4>
+          <p class="text-[10px] text-zinc-400">Suporta sa mabilis na streaming</p>
+        </div>
+        <span class="text-sm font-extrabold text-amber-400">₱5.00</span>
+      </div>
+
+      <!-- VIP Plans List -->
+      <div id="plansSection" class="space-y-1.5 hidden">
+        <div onclick="selectVipPlan('Monthly Plan', '50')" class="vip-plan-card p-2.5 rounded-xl border border-[#202433] bg-[#0c0d12] flex items-center justify-between cursor-pointer">
+          <span class="text-xs font-bold">Monthly (30 Days)</span>
+          <span class="text-xs font-bold text-amber-400">₱50</span>
+        </div>
+        <div onclick="selectVipPlan('Quarterly Plan', '150')" class="vip-plan-card p-2.5 rounded-xl border border-[#202433] bg-[#0c0d12] flex items-center justify-between cursor-pointer">
+          <span class="text-xs font-bold">Quarterly (90 Days)</span>
+          <span class="text-xs font-bold text-amber-400">₱150</span>
+        </div>
+        <div onclick="selectVipPlan('Yearly Plan', '250')" class="vip-plan-card p-2.5 rounded-xl border border-[#202433] bg-[#0c0d12] flex items-center justify-between cursor-pointer">
+          <span class="text-xs font-bold">Yearly (365 Days)</span>
+          <span class="text-xs font-bold text-amber-400">₱250</span>
+        </div>
+      </div>
+
+      <!-- Payment Method -->
+      <div class="space-y-1.5">
+        <div class="grid grid-cols-2 gap-2">
+          <button type="button" id="btnMethodGcash" onclick="setMethod('GCASH')" class="py-1.5 rounded-lg border border-blue-600 bg-blue-600/20 text-blue-400 font-bold text-xs">
+            💙 GCash
+          </button>
+          <button type="button" id="btnMethodPaypal" onclick="setMethod('PAYPAL')" class="py-1.5 rounded-lg border border-[#202433] bg-[#0c0d12] text-zinc-400 text-xs">
+            🅿️ PayPal
+          </button>
+        </div>
+
+        <div id="accountInfoBox" class="p-2.5 rounded-lg bg-[#0c0d12] border border-[#202433] text-[11px] font-mono">
+          <div>GCASH: <span class="font-bold text-white">09638924040</span></div>
+          <div class="text-[9px] text-zinc-400">NAME: PINOMAX ADMIN</div>
+        </div>
+      </div>
+
+      <!-- Ref Input -->
+      <input 
+        type="text" 
+        id="vipRefInput" 
+        placeholder="Ilagay ang Ref# ng bayad" 
+        class="w-full px-3 py-2 rounded-xl bg-[#0c0d12] border border-[#202433] text-xs text-white placeholder-zinc-500 font-mono"
+      >
+
+      <button id="btnSubmitPay" onclick="submitPaymentRequest()" class="w-full py-2.5 rounded-xl bg-rose-600 active:bg-rose-700 text-white font-bold text-xs shadow-lg cursor-pointer">
+        IPASA ANG BAYAD (SUBMIT)
+      </button>
+      <p id="modalStatusMsg" class="text-center text-[10px] hidden"></p>
+
+    </div>
+  </div>
+
+  <script>
+    lucide.createIcons();
+
+    // 1. User Identity (Telegram Mini App o Normal Browser)
+    let userUid = localStorage.getItem('user_uid') || '';
+    let userName = localStorage.getItem('user_name') || '';
+
+    try {
+      if (window.Telegram?.WebApp) {
+        window.Telegram.WebApp.ready();
+        if (window.Telegram.WebApp.initDataUnsafe?.user) {
+          const tgUser = window.Telegram.WebApp.initDataUnsafe.user;
+          userUid = String(tgUser.id);
+          userName = tgUser.first_name + (tgUser.username ? ' (@' + tgUser.username + ')' : '');
+          try { window.Telegram.WebApp.expand(); } catch(e) {}
+        }
+      }
+    } catch(e) {}
+
+    if (!userUid) {
+      userUid = 'TG_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6);
+      userName = 'User_' + Math.floor(1000 + Math.random() * 9000);
+    }
+    localStorage.setItem('user_uid', userUid);
+    localStorage.setItem('user_name', userName);
+
+    let isUserVip = false;
+    let selectedPlan = '5 Pesos Donate';
+    let selectedAmount = '5';
+    let selectedMethod = 'GCASH';
+
+    // 2. Check VIP Status sa Firebase
+    async function checkVip() {
+      try {
+        const res = await fetch(`/api/vip/status/${userUid}`);
+        const data = await res.json();
+        if (data && data.isVip) {
+          isUserVip = true;
+        }
+      } catch(e) {}
+    }
+    checkVip();
+
+    // 3. Play Button Handler (Gumagana sa Chrome, Safari, at Telegram)
+    function handlePlayClick(fileId) {
+      if (isUserVip) {
+        window.location.href = `/embed/${fileId}`;
+      } else {
+        openVipModal('plans');
+      }
+    }
+
+    function openVipModal(tab) {
+      const modal = document.getElementById('vipPaymentModal');
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+      switchPlanTab(tab);
+    }
+
+    function closeVipModal() {
+      const modal = document.getElementById('vipPaymentModal');
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+    }
+
+    function switchPlanTab(tab) {
+      const donateSec = document.getElementById('donateSection');
+      const plansSec = document.getElementById('plansSection');
+      const tabDonateBtn = document.getElementById('tabDonateBtn');
+      const tabPlansBtn = document.getElementById('tabPlansBtn');
+
+      if (tab === 'donate') {
+        donateSec.classList.remove('hidden');
+        plansSec.classList.add('hidden');
+        tabDonateBtn.className = 'py-1 text-xs font-bold rounded-lg bg-amber-500 text-black';
+        tabPlansBtn.className = 'py-1 text-xs font-semibold rounded-lg text-zinc-400';
+        selectedPlan = '5 Pesos Donate';
+        selectedAmount = '5';
+      } else {
+        donateSec.classList.add('hidden');
+        plansSec.classList.remove('hidden');
+        tabPlansBtn.className = 'py-1 text-xs font-bold rounded-lg bg-amber-500 text-black';
+        tabDonateBtn.className = 'py-1 text-xs font-semibold rounded-lg text-zinc-400';
+        selectVipPlan('Monthly Plan', '50');
+      }
+    }
+
+    function selectVipPlan(name, amount) {
+      selectedPlan = name;
+      selectedAmount = amount;
+      document.querySelectorAll('.vip-plan-card').forEach(c => c.classList.remove('border-amber-500'));
+      if (event?.currentTarget) event.currentTarget.classList.add('border-amber-500');
+    }
+
+    function setMethod(method) {
+      selectedMethod = method;
+      const box = document.getElementById('accountInfoBox');
+      if (method === 'GCASH') {
+        box.innerHTML = '<div>GCASH: <span class="font-bold text-white">09638924040</span></div><div class="text-[9px] text-zinc-400">NAME: PINOMAX ADMIN</div>';
+      } else {
+        box.innerHTML = '<div>PAYPAL: <span class="font-bold text-white">payments@pinomax.com</span></div><div class="text-[9px] text-zinc-400">Send as Friends &amp; Family</div>';
+      }
+    }
+
+    async function submitPaymentRequest() {
+      const ref = document.getElementById('vipRefInput').value.trim();
+      const statusMsg = document.getElementById('modalStatusMsg');
+      if (!ref) return alert('Ilagay ang Ref#!');
+
+      statusMsg.className = 'text-center text-[10px] text-amber-400 block';
+      statusMsg.innerText = 'Ipinapasa ang bayad...';
+
+      try {
+        const res = await fetch('/api/vip/submit-request', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            uid: userUid,
+            userName: userName,
+            planName: selectedPlan,
+            amount: selectedAmount,
+            method: selectedMethod,
+            refNumber: ref
+          })
+        });
+        const data = await res.json();
+        if (data.success) {
+          statusMsg.className = 'text-center text-[10px] text-emerald-400 block';
+          statusMsg.innerText = '✅ Naisumite na sa Admin!';
+          document.getElementById('vipRefInput').value = '';
+          setTimeout(() => { closeVipModal(); checkVip(); }, 2000);
+        }
+      } catch(e) {
+        statusMsg.className = 'text-center text-[10px] text-rose-400 block';
+        statusMsg.innerText = '❌ Error sa pagpasa.';
+      }
+    }
+    
+    // 🔍 REAL-TIME LIVE SEARCH FILTER
+    function liveFilterMovies() {
+      const query = document.getElementById('searchInput').value.toLowerCase().trim();
+      const cards = document.querySelectorAll('.card-movie');
+      let visibleCount = 0;
+
+      cards.forEach(card => {
+        const title = card.getAttribute('data-title') || card.innerText.toLowerCase();
+        if (title.includes(query)) {
+          card.style.display = 'flex';
+          visibleCount++;
+        } else {
+          card.style.display = 'none';
+        }
+      });
+
+      // No results message
+      let noMsg = document.getElementById('noResultsLive');
+      if (!noMsg) {
+        noMsg = document.createElement('div');
+        noMsg.id = 'noResultsLive';
+        noMsg.className = 'p-6 text-center text-xs text-zinc-500 bg-[#141721] rounded-xl border border-[#202433]';
+        noMsg.innerText = 'Walang nahanap na tugmang pelikula.';
+        document.getElementById('moviesContainer').appendChild(noMsg);
+      }
+      noMsg.style.display = (visibleCount === 0 && cards.length > 0) ? 'block' : 'none';
+    }
+    
+  </script>
+</body>
+</html>

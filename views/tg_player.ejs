@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="en" class="dark h-full bg-[#080808]">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title><%= file.fileName %> - Telegram Stream Player</title>
+  <meta name="description" content="Stream <%= file.fileName %> directly in browser with chunked Range playback and instant buffering">
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            bg: '#080808',
+            card: '#121212',
+            cardHover: '#171717',
+            border: '#262626',
+            accent: {
+              DEFAULT: '#e11d48',
+              hover: '#f43f5e',
+              glow: 'rgba(225, 29, 72, 0.25)',
+              dim: 'rgba(225, 29, 72, 0.1)'
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Artplayer.js & Plyr.js CDNs -->
+  <script src="https://cdn.jsdelivr.net/npm/artplayer/dist/artplayer.js"></script>
+  <link rel="stylesheet" href="https://cdn.plyr.io/3.7.8/plyr.css" />
+  <script src="https://cdn.plyr.io/3.7.8/plyr.polyfilled.js"></script>
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --bg: #080808;
+      --card: #121212;
+      --card-hover: #171717;
+      --border: #262626;
+      --accent: #e11d48;
+      --text: #f5f5f5;
+      --text-dim: #a3a3a3;
+      --plyr-color-main: #e11d48;
+      --plyr-video-background: #000000;
+    }
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+    }
+    .artplayer-app, .plyr-wrapper {
+      width: 100%;
+      height: 100%;
+      background-color: #000000;
+    }
+    .bento-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+    }
+    .bento-badge {
+      padding: 4px 8px;
+      border-radius: 6px;
+      background: #1a1a1a;
+      font-size: 11px;
+      color: #e5e5e5;
+      border: 1px solid var(--border);
+    }
+    .accent-dot {
+      width: 6px;
+      height: 6px;
+      background: var(--accent);
+      border-radius: 50%;
+      box-shadow: 0 0 8px var(--accent);
+    }
+    .plyr--video {
+      height: 100%;
+      border-radius: 14px;
+    }
+  </style>
+</head>
+<body class="bg-[#080808] text-[#f5f5f5] min-h-screen flex flex-col antialiased selection:bg-rose-600 selection:text-white">
+
+  <!-- Header -->
+  <header class="sticky top-0 z-40 border-b border-[#262626] bg-[#080808]/90 backdrop-blur-md">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
+      <a href="/" class="flex items-center gap-3 group">
+        <div class="w-9 h-9 rounded-xl bg-rose-600 flex items-center justify-center font-extrabold text-white text-sm shadow-[0_0_15px_rgba(225,29,72,0.4)] group-hover:scale-105 transition-transform">
+          SP
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="text-base font-extrabold tracking-tight text-white flex items-center">
+            STREAM<span class="text-rose-500">PORTAL</span>
+          </span>
+          <span class="bento-badge text-[10px] font-mono text-rose-400 border-rose-500/30">MTPROTO 512KB STREAM</span>
+        </div>
+      </a>
+
+      <!-- Quick Action Buttons -->
+      <div class="flex items-center gap-2 sm:gap-3">
+        <!-- Engine Switcher Pill -->
+        <div class="bg-[#141414] border border-[#262626] rounded-xl p-1 flex items-center gap-1 text-xs">
+          <button id="engine-artplayer-btn" onclick="switchPlayerEngine('artplayer')" class="px-2.5 py-1 rounded-lg font-medium text-xs bg-rose-600 text-white transition">Artplayer</button>
+          <button id="engine-plyr-btn" onclick="switchPlayerEngine('plyr')" class="px-2.5 py-1 rounded-lg font-medium text-xs text-zinc-400 hover:text-white transition">Plyr (HTML5)</button>
+        </div>
+
+        <a 
+          href="/download/<%= file.fileUniqueId %>" 
+          class="px-3.5 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-semibold text-xs transition flex items-center gap-2 shadow-lg shadow-rose-600/25"
+        >
+          <i data-lucide="download" class="w-4 h-4"></i>
+          <span class="hidden sm:inline">Direct Download</span>
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <!-- Player Main Layout -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+
+    <!-- Video Viewport Container -->
+    <div class="bento-card overflow-hidden bg-black aspect-video w-full max-h-[72vh] relative shadow-2xl shadow-rose-950/20 border border-[#262626]">
+      
+      <!-- Artplayer Container -->
+      <div id="artplayer-container" class="artplayer-app"></div>
+
+      <!-- Plyr HTML5 Video Container (Hidden by default) -->
+      <div id="plyr-container" class="plyr-wrapper hidden flex items-center justify-center bg-black h-full w-full">
+        <video id="plyr-video" class="w-full h-full" playsinline controls preload="metadata" crossorigin="anonymous">
+          <source src="<%= streamUrl %>" type="<%= file.mimeType || 'video/mp4' %>">
+          Your browser does not support HTML5 video playback.
+        </video>
+      </div>
+
+      <!-- Buffer & Diagnostic Status Bar -->
+      <div id="player-buffer-indicator" class="absolute top-4 left-4 z-20 pointer-events-none opacity-0 transition-opacity duration-300">
+        <div class="px-3 py-1.5 rounded-lg bg-black/80 backdrop-blur-md border border-rose-500/30 text-rose-400 font-mono text-[11px] flex items-center gap-2 shadow-lg">
+          <div class="w-2 h-2 rounded-full bg-rose-500 animate-ping"></div>
+          <span>Buffering Range Chunks...</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Details Bento Box -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      
+      <!-- Video Information (2 cols) -->
+      <div class="lg:col-span-2 bento-card p-6 space-y-4">
+        <div class="flex flex-wrap items-center gap-2">
+          <span class="bento-badge font-mono text-[10px] text-rose-400 border-rose-500/30">
+            HTTP 206 RANGE STREAM
+          </span>
+          <span class="bento-badge font-mono text-[10px] text-zinc-400">
+            512KB MTPROTO CHUNKS
+          </span>
+          <span class="bento-badge font-mono text-[10px] text-zinc-400">
+            <%= file.mimeType || 'video/mp4' %>
+          </span>
+          <% if (file.formattedSize) { %>
+            <span class="bento-badge font-mono text-[10px] text-emerald-400">
+              <%= file.formattedSize %>
+            </span>
+          <% } %>
+        </div>
+
+        <h1 class="text-lg sm:text-xl font-extrabold text-white break-words">
+          <%= file.fileName %>
+        </h1>
+
+        <!-- Copyable URLs Section -->
+        <div class="space-y-3 pt-2">
+          <div class="space-y-1">
+            <label class="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider flex items-center justify-between">
+              <span>📺 HTTP Stream URL (For VLC / MX Player / Web)</span>
+              <button type="button" onclick="copyToClipboard('<%= streamUrl %>')" class="text-rose-400 hover:text-rose-300 text-[10px]">Copy</button>
+            </label>
+            <div class="flex items-center gap-2 p-2.5 rounded-xl bg-[#181818] border border-[#262626] text-xs font-mono text-zinc-300 select-all overflow-x-auto">
+              <span class="text-rose-400 flex-shrink-0">GET</span>
+              <span class="truncate"><%= streamUrl %></span>
+            </div>
+          </div>
+
+          <div class="space-y-1">
+            <label class="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider flex items-center justify-between">
+              <span>📥 Direct Download URL</span>
+              <button type="button" onclick="copyToClipboard('<%= downloadUrl %>')" class="text-rose-400 hover:text-rose-300 text-[10px]">Copy</button>
+            </label>
+            <div class="flex items-center gap-2 p-2.5 rounded-xl bg-[#181818] border border-[#262626] text-xs font-mono text-zinc-300 select-all overflow-x-auto">
+              <span class="text-emerald-400 flex-shrink-0">GET</span>
+              <span class="truncate"><%= downloadUrl %></span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Quick Actions Sidebar (1 col) -->
+      <div class="bento-card p-6 space-y-4 flex flex-col justify-between">
+        <div class="space-y-4">
+          <div class="flex items-center gap-2 text-xs font-bold text-zinc-300 uppercase tracking-wider">
+            <div class="accent-dot"></div> STREAM TELEMETRY
+          </div>
+
+          <div class="space-y-2 text-xs text-zinc-400 font-mono">
+            <div class="flex justify-between py-1.5 border-b border-[#222]">
+              <span>File ID:</span>
+              <span class="text-zinc-200 truncate max-w-[140px]"><%= file.fileUniqueId %></span>
+            </div>
+            <div class="flex justify-between py-1.5 border-b border-[#222]">
+              <span>Range Chunk Size:</span>
+              <span class="text-rose-400 font-semibold">512 KB</span>
+            </div>
+            <div class="flex justify-between py-1.5 border-b border-[#222]">
+              <span>Preload Strategy:</span>
+              <span class="text-emerald-400 font-semibold">metadata</span>
+            </div>
+            <div class="flex justify-between py-1.5 border-b border-[#222]">
+              <span>Client Abort Guard:</span>
+              <span class="text-emerald-400 font-semibold">Active</span>
+            </div>
+            <div class="flex justify-between py-1.5">
+              <span>Views / Downloads:</span>
+              <span class="text-zinc-200"><%= file.views || 1 %> / <%= file.downloads || 0 %></span>
+            </div>
+          </div>
+        </div>
+
+        <div class="pt-4 border-t border-[#262626] space-y-2">
+          <a 
+            href="/download/<%= file.fileUniqueId %>" 
+            class="w-full py-2.5 rounded-xl bg-[#181818] hover:bg-zinc-800 text-white font-semibold text-xs border border-[#262626] transition flex items-center justify-center gap-2"
+          >
+            <i data-lucide="download" class="w-4 h-4 text-rose-500"></i>
+            Download File (<%= file.formattedSize || 'Media' %>)
+          </a>
+        </div>
+      </div>
+
+    </div>
+
+  </main>
+
+  <!-- Player Script -->
+  <script>
+    lucide.createIcons();
+
+    let currentEngine = 'artplayer';
+    let art = null;
+    let plyrInstance = null;
+    const streamUrl = '<%= streamUrl %>';
+    const downloadUrl = '<%= downloadUrl %>';
+    const bufferIndicator = document.getElementById('player-buffer-indicator');
+
+    function showBuffering(show) {
+      if (!bufferIndicator) return;
+      if (show) {
+        bufferIndicator.classList.remove('opacity-0');
+      } else {
+        bufferIndicator.classList.add('opacity-0');
+      }
+    }
+
+    // Initialize Artplayer with Chunked HTTP Stream & Preload Metadata
+    function initArtplayer() {
+      if (art && art.destroy) {
+        try { art.destroy(); } catch (e) {}
+      }
+
+      art = new Artplayer({
+        container: '#artplayer-container',
+        url: streamUrl,
+        title: '<%= file.fileName.replace(/\'/g, "\\'") %>',
+        type: 'mp4',
+        volume: 0.8,
+        isLive: false,
+        muted: false,
+        autoplay: false,
+        pip: true,
+        autoSize: false,
+        autoMini: true,
+        screenshot: true,
+        setting: true,
+        loop: false,
+        flip: true,
+        playbackRate: true,
+        aspectRatio: true,
+        fullscreen: true,
+        fullscreenWeb: true,
+        miniProgressBar: true,
+        mutex: true,
+        backdrop: true,
+        playsInline: true,
+        autoPlayback: true,
+        airplay: true,
+        theme: '#e11d48',
+        moreVideoAttr: {
+          preload: 'metadata',
+          crossOrigin: 'anonymous',
+          playsinline: 'true'
+        },
+        icons: {
+          loading: '<div class="w-10 h-10 border-4 border-rose-500 border-t-transparent rounded-full animate-spin"></div>',
+        },
+        controls: [
+          {
+            name: 'download-btn',
+            position: 'right',
+            html: '<span class="art-icon" title="Direct Download"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg></span>',
+            click: function() {
+              window.location.href = downloadUrl;
+            }
+          }
+        ]
+      });
+
+      // Smooth buffer and event listeners
+      art.on('video:waiting', () => showBuffering(true));
+      art.on('video:playing', () => showBuffering(false));
+      art.on('video:canplay', () => showBuffering(false));
+      art.on('video:seeking', () => showBuffering(true));
+      art.on('video:seeked', () => showBuffering(false));
+
+      art.on('error', (error) => {
+        console.warn('Artplayer stream playback notice:', error);
+        showBuffering(false);
+      });
+    }
+
+    // Initialize Plyr HTML5 Player with preload metadata & smooth buffer fallback
+    function initPlyr() {
+      const videoEl = document.getElementById('plyr-video');
+      if (!plyrInstance) {
+        plyrInstance = new Plyr(videoEl, {
+          controls: [
+            'play-large', 'play', 'progress', 'current-time', 'duration',
+            'mute', 'volume', 'captions', 'settings', 'pip', 'airplay', 'fullscreen'
+          ],
+          ratio: '16:9',
+          tooltips: { controls: true, seek: true }
+        });
+
+        videoEl.addEventListener('waiting', () => showBuffering(true));
+        videoEl.addEventListener('playing', () => showBuffering(false));
+        videoEl.addEventListener('canplay', () => showBuffering(false));
+        videoEl.addEventListener('seeking', () => showBuffering(true));
+        videoEl.addEventListener('seeked', () => showBuffering(false));
+      }
+    }
+
+    function switchPlayerEngine(engine) {
+      currentEngine = engine;
+      const artContainer = document.getElementById('artplayer-container');
+      const plyrContainer = document.getElementById('plyr-container');
+      const artBtn = document.getElementById('engine-artplayer-btn');
+      const plyrBtn = document.getElementById('engine-plyr-btn');
+
+      if (engine === 'plyr') {
+        if (art && art.pause) {
+          try { art.pause(); } catch(e) {}
+        }
+        artContainer.classList.add('hidden');
+        plyrContainer.classList.remove('hidden');
+
+        artBtn.className = "px-2.5 py-1 rounded-lg font-medium text-xs text-zinc-400 hover:text-white transition";
+        plyrBtn.className = "px-2.5 py-1 rounded-lg font-medium text-xs bg-rose-600 text-white transition";
+
+        initPlyr();
+      } else {
+        const videoEl = document.getElementById('plyr-video');
+        if (videoEl && !videoEl.paused) {
+          videoEl.pause();
+        }
+        plyrContainer.classList.add('hidden');
+        artContainer.classList.remove('hidden');
+
+        artBtn.className = "px-2.5 py-1 rounded-lg font-medium text-xs bg-rose-600 text-white transition";
+        plyrBtn.className = "px-2.5 py-1 rounded-lg font-medium text-xs text-zinc-400 hover:text-white transition";
+
+        if (!art) {
+          initArtplayer();
+        }
+      }
+    }
+
+    // Default start
+    initArtplayer();
+
+    function copyToClipboard(text) {
+      navigator.clipboard.writeText(text).then(() => {
+        alert('Copied to clipboard: ' + text);
+      }).catch(() => {
+        prompt('Copy this link:', text);
+      });
+    }
+  </script>
+</body>
+</html>
