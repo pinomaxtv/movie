@@ -154,10 +154,17 @@ async function getStreamFileRecord(fileId) {
   if (isMongoConnected && model) {
     try {
       const fileRecord = await model.findOne({
-        $or: [ { file_unique_id: idStr }, { file_id: idStr } ]
+        $or: [
+          { file_unique_id: idStr },
+          { file_id: idStr },
+          { unique_id: idStr },
+          { fileId: idStr }
+        ]
       }).lean();
       if (fileRecord) return fileRecord;
-    } catch (e) {}
+    } catch (e) {
+      console.error('MongoDB find error:', e.message);
+    }
   }
   return inMemoryFiles.get(idStr) || null;
 }
@@ -201,13 +208,32 @@ if (tgClient && API_ID && API_HASH && BOT_TOKEN) {
       isGramJsConnected = true;
       console.log('✅ Telegram GramJS MTProto Client successfully authenticated!');
       
-      // 🟢 AUTO-SAVE SESSION PARA HINDI MAGKA-AMNESIA SA CHANNELS
+      // 🟢 I-PRINT ANG SESSION STRING (Para makopya mo sa Railway)
       try {
         const savedSession = tgClient.session.save();
         if (savedSession) {
-          console.log('🔑 Session Active & Channel Keys Cached!');
+          console.log('🔑 SESSION_STRING MO (Kopyahin ito sa Railway):', savedSession);
         }
       } catch (_) {}
+
+      // 🟢 AUTO-CONNECT SA MGA STORAGE CHANNELS
+      const rawChannels = process.env.STORAGE_CHANNELS || '';
+      const STORAGE_CHANNELS = rawChannels
+        .split(',')
+        .map(id => id.trim())
+        .filter(Boolean);
+
+      if (STORAGE_CHANNELS.length > 0) {
+        console.log(`🔄 Kinokonekta ang ${STORAGE_CHANNELS.length} storage channels...`);
+        for (const chId of STORAGE_CHANNELS) {
+          try {
+            await tgClient.getInputEntity(chId);
+            console.log(`✅ Channel Connected & Cached: ${chId}`);
+          } catch (err) {
+            console.warn(`⚠️ Warning: Hindi ma-cache ang channel ${chId}:`, err.message);
+          }
+        }
+      }
       // Keep Alive
       setInterval(async () => {
         if (tgClient && isGramJsConnected) {
@@ -556,26 +582,38 @@ app.get('/api/payment-config', (req, res) => {
   res.json(PAYMENT_CONFIG);
 });
 
-// ---------------------------------------------------------------------------
-// 5. ⚡ STABLE & FAST STREAMER (NO RECONNECT ERRORS & BANDWIDTH PROTECTED)
-// ---------------------------------------------------------------------------
 app.get('/stream/:fileId', async (req, res) => {
   const fileId = req.params.fileId;
   const rec = await getStreamFileRecord(fileId);
-  if (!rec || !tgClient || !isGramJsConnected) {
+  
+  if (!rec) {
+    console.error(`❌ Stream Failed: File record not found in MongoDB for ID: ${fileId}`);
+    return res.redirect('https://vjs.zencdn.net/v/oceans.mp4');
+  }
+
+  if (!tgClient || !isGramJsConnected) {
+    console.error('❌ Stream Failed: Telegram MTProto Client not connected');
     return res.redirect('https://vjs.zencdn.net/v/oceans.mp4');
   }
 
   try {
-    let peer = rec.chat_id;
-    if (typeof peer === 'string' && peer.startsWith('-100')) {
-      peer = bigInt(peer.replace('-100', ''));
+    let peer = rec.chat_id || rec.chatId;
+    
+    // 🟢 RESOLVE TELEGRAM PEER PARA SA LAHAT NG STORAGE CHANNELS
+    let targetEntity;
+    try {
+      targetEntity = await tgClient.getInputEntity(peer);
+    } catch (resolveErr) {
+      if (typeof peer === 'string' && peer.startsWith('-100')) {
+        peer = bigInt(peer.replace('-100', ''));
+      }
+      targetEntity = await tgClient.getInputEntity(peer);
     }
 
-    const msgIdNum = Number(rec.message_id);
+    const msgIdNum = Number(rec.message_id || rec.messageId);
     const cacheKey = `${rec.chat_id}_${msgIdNum}`;
     let mediaObj = null;
-    let totalSize = Number(rec.file_size || 0);
+    let totalSize = Number(rec.file_size || rec.fileSize || 0);
 
     // 🟢 1. FAST MEMORY CACHE
     if (telegramMediaCache.has(cacheKey)) {
@@ -583,9 +621,13 @@ app.get('/stream/:fileId', async (req, res) => {
       mediaObj = cached.media;
       if (cached.size) totalSize = cached.size;
     } else {
-      const msgs = await tgClient.getMessages(peer, { ids: [msgIdNum] });
+      const msgs = await tgClient.getMessages(targetEntity, { ids: [msgIdNum] });
       const msg = msgs && msgs[0];
-      if (!msg || !msg.media) return res.redirect('https://vjs.zencdn.net/v/oceans.mp4');
+      
+      if (!msg || !msg.media) {
+        console.error(`❌ Stream Failed: Message not found in Telegram (Channel: ${peer}, Msg ID: ${msgIdNum})`);
+        return res.redirect('https://vjs.zencdn.net/v/oceans.mp4');
+      }
       
       mediaObj = msg.media;
       totalSize = Number(msg.file?.size || totalSize);
@@ -610,7 +652,7 @@ app.get('/stream/:fileId', async (req, res) => {
       'Accept-Ranges': 'bytes'
     };
 
-    // 🟢 2. STANDARD HTTP 206 (Walang reconnect bug)
+    // 🟢 2. STANDARD HTTP 206
     if (range) {
       const parts = range.replace(/bytes=/, '').split('-');
       start = parseInt(parts[0], 10);
@@ -631,7 +673,7 @@ app.get('/stream/:fileId', async (req, res) => {
       });
     }
 
-    // 🟢 3. 512KB CHUNK STREAMING NA MAY AUTO-CANCEL KAPAG NAG-PAUSE ANG USER
+    // 🟢 3. STREAMING CHUNKS (1MB CHUNK)
     const stream = tgClient.iterDownload({
       file: mediaObj,
       offset: bigInt(start),
@@ -641,7 +683,7 @@ app.get('/stream/:fileId', async (req, res) => {
 
     let closed = false;
     req.on('close', () => { 
-      closed = true; // Agad hihinto sa Telegram kapag umalis o nag-pause ang user
+      closed = true;
     });
 
     for await (const chunk of stream) {
@@ -651,6 +693,7 @@ app.get('/stream/:fileId', async (req, res) => {
     if (!closed) res.end();
 
   } catch (e) {
+    console.error('❌ Stream Route Critical Error:', e.message);
     if (!res.headersSent) res.redirect('https://vjs.zencdn.net/v/oceans.mp4');
   }
 });
