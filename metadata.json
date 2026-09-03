@@ -1,0 +1,6 @@
+{
+  "name": "Telegram MTProto Media Streaming & Direct Downloader",
+  "description": "Production-ready Telegram Media Streaming and Firebase Realtime Database Video Portal with Artplayer, HLS, DASH, Web Embeds, 2GB MTProto HTTP 206 partial streaming, and dedicated Standalone Embed Player for Android WebViews.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

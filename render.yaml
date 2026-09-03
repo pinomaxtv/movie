@@ -1,0 +1,27 @@
+services:
+  - type: web
+    name: telegram-video-streamer
+    runtime: node
+    plan: free
+    region: oregon
+    buildCommand: npm install
+    startCommand: node server.js
+    healthCheckPath: /ping
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3000
+      - key: APP_URL
+        sync: false
+      - key: BOT_TOKEN
+        sync: false
+      - key: ADMIN_ID
+        sync: false
+      - key: MONGODB_URI
+        sync: false
+      - key: FIREBASE_DATABASE_URL
+        value: https://jetmax-f3e8e-default-rtdb.firebaseio.com
+      - key: TMDB_API_KEY
+        sync: false

@@ -1,0 +1,44 @@
+{
+  "name": "personal-video-streaming-portal",
+  "version": "1.0.0",
+  "description": "Production-ready lightweight Personal Video Streaming Portal and Embed Player using Express.js, EJS, TMDB API, and Artplayer.js",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "build": "echo 'Build successful'",
+    "lint": "echo 'No lint errors'"
+  },
+  "keywords": [
+    "video-player",
+    "artplayer",
+    "tmdb",
+    "express",
+    "ejs",
+    "streaming",
+    "embed-player",
+    "render-deploy"
+  ],
+  "author": "Cloud & Full-Stack Engineer",
+  "license": "MIT",
+  "dependencies": {
+    "adm-zip": "^0.5.10",
+    "axios": "^1.19.0",
+    "big-integer": "^1.6.52",
+    "cors": "^2.8.6",
+    "dotenv": "^17.2.3",
+    "ejs": "^6.0.1",
+    "express": "^4.21.2",
+    "helmet": "^8.3.0",
+    "mongoose": "^9.9.2",
+    "telegraf": "^4.16.3",
+    "telegram": "^2.26.22"
+  },
+  "devDependencies": {
+    "@types/node": "^22.14.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
