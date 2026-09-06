@@ -220,7 +220,7 @@
     // 1. Raw Server Data Injection mula sa EJS
     const RAW_MOVIES = <%- JSON.stringify(typeof movies !== 'undefined' ? movies : []) %>;
     
-    // 🧠 2. SMART AUTO-GROUPER (Pinag-iisa ang Episodes ng Series tulad ng Mousetrap)
+    // 🧠 2. SMART AUTO-GROUPER (TOTOONG SERIES LANG ANG MAY EPISODES, MOVIE AY PLAY)
     function processAndGroupMedia(items) {
       const singles = [];
       const seriesMap = new Map();
@@ -228,20 +228,24 @@
       items.forEach(item => {
         const rawTitle = (item.title || item.file_name || 'Untitled').trim();
         
-        // Regex para ma-detect ang S1E1, Season 1 Episode 2, Ep 3, etc.
-        const match = rawTitle.match(/^(.*?)(?:\s+|-|_)*(?:[sS](\d+)\s*[eE](\d+)|(?:Season|S)\s*(\d+)\s*(?:Episode|Ep|E)\s*(\d+)|(?:Episode|Ep|E)\s*(\d+))(.*)$/i);
-        const isSeriesCategory = (item.genre || '').toLowerCase() === 'series' || (item.category || '').toLowerCase() === 'series';
+        // 🎯 Eksaktong pattern lang: S01E01, Season 1 Episode 1, Ep 1, o S1
+        const match = rawTitle.match(/\b(?:s(\d+)\s*e(\d+)|season\s*(\d+)\s*episode\s*(\d+)|(?:season|s)\s*(\d+)|(?:episode|ep)\s*(\d+))\b/i);
 
-        if (match || isSeriesCategory) {
-          let seriesName = match ? match[1].trim() : rawTitle;
+        // KUNG MAY EKSAKTONG PATTERN NG SEASON O EPISODE (Tulad ng Mousetrap):
+        if (match) {
+          // Kunin ang buong pamagat bago mag-season/episode
+          let seriesName = rawTitle.substring(0, match.index).trim();
+          if (!seriesName) seriesName = rawTitle;
+
+          // Tanggalin ang kalat sa dulo tulad ng tuldok o gitling
           seriesName = seriesName
             .replace(/\.mp4|\.mkv|\.webm/gi, '')
             .replace(/tagalog dubbed|tagdub|dubbed|pinoy|tagalog/gi, '')
-            .replace(/[\(\)\[\]_\-\.]+/g, ' ')
+            .replace(/[\(\)\[\]_\-\.]+$/, '')
             .trim();
 
-          const sNum = match ? (match[2] || match[4] || 1) : 1;
-          const eNum = match ? (match[3] || match[5] || match[6] || 1) : 1;
+          const sNum = match[1] || match[3] || match[5] || 1;
+          const eNum = match[2] || match[4] || match[6] || 1;
 
           const epData = {
             id: item.id || item.node,
@@ -252,8 +256,9 @@
             rating: item.rating || '8.5'
           };
 
-          if (!seriesMap.has(seriesName.toLowerCase())) {
-            seriesMap.set(seriesName.toLowerCase(), {
+          const key = seriesName.toLowerCase();
+          if (!seriesMap.has(key)) {
+            seriesMap.set(key, {
               isSeries: true,
               title: seriesName,
               image: item.image,
@@ -264,10 +269,10 @@
               episodes: [epData]
             });
           } else {
-            seriesMap.get(seriesName.toLowerCase()).episodes.push(epData);
+            seriesMap.get(key).episodes.push(epData);
           }
         } else {
-          // Standalone Movie
+          // 🎬 KUNG WALANG S01E01 O EPISODE: 100% STANDALONE MOVIE ITO!
           singles.push({
             ...item,
             isSeries: false
@@ -275,7 +280,7 @@
         }
       });
 
-      // I-sort ang episodes (Episode 1 hanggang 10 pataas)
+      // I-sort ang bawat series mula Episode 1 pataas
       seriesMap.forEach(series => {
         series.episodes.sort((a, b) => {
           if (a.season === b.season) return a.episode - b.episode;
