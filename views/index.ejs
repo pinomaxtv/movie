@@ -220,32 +220,32 @@
     // 1. Raw Server Data Injection mula sa EJS
     const RAW_MOVIES = <%- JSON.stringify(typeof movies !== 'undefined' ? movies : []) %>;
     
-    // 🧠 2. SMART AUTO-GROUPER (TOTOONG SERIES LANG ANG MAY EPISODES, MOVIE AY PLAY)
+   // 🧠 2. SMART AUTO-GROUPER (PULIDONG FILTER: MOVIE = PLAY, SERIES = EPISODES)
     function processAndGroupMedia(items) {
-      const singles = [];
       const seriesMap = new Map();
+      const singles = [];
 
       items.forEach(item => {
         const rawTitle = (item.title || item.file_name || 'Untitled').trim();
-        
-        // 🎯 Eksaktong pattern lang: S01E01, Season 1 Episode 1, Ep 1, o S1
-        const match = rawTitle.match(/\b(?:s(\d+)\s*e(\d+)|season\s*(\d+)\s*episode\s*(\d+)|(?:season|s)\s*(\d+)|(?:episode|ep)\s*(\d+))\b/i);
 
-        // KUNG MAY EKSAKTONG PATTERN NG SEASON O EPISODE (Tulad ng Mousetrap):
+        // 🎯 MATALAS NA PATTERN: S01E01, S1E1, Season 1 Episode 2, o Ep 1 lang ang papayagan!
+        // Hindi na maliligaw sa mga salitang may "The 5th" o taon tulad ng "2024"
+        const seriesPattern = /\b(?:s(\d{1,2})\s*e(\d{1,3})|season\s*(\d{1,2})\s*episode\s*(\d{1,3})|(?:episode|ep)\.?\s*(\d{1,3}))\b/i;
+        const match = rawTitle.match(seriesPattern);
+
         if (match) {
-          // Kunin ang buong pamagat bago mag-season/episode
-          let seriesName = rawTitle.substring(0, match.index).trim();
-          if (!seriesName) seriesName = rawTitle;
-
-          // Tanggalin ang kalat sa dulo tulad ng tuldok o gitling
-          seriesName = seriesName
-            .replace(/\.mp4|\.mkv|\.webm/gi, '')
+          // Tanggalin lang ang S01E01 para manatili ang buong pamagat (Hindi na magiging "Th"!)
+          let cleanSeriesName = rawTitle.replace(seriesPattern, '');
+          cleanSeriesName = cleanSeriesName
+            .replace(/\.mp4|\.mkv|\.webm|\.avi/gi, '')
+            .replace(/@\w+/g, '')
+            .replace(/1080p|720p|480p|hdrip|bluray|web-dl|webrip|x264|x265|hevc/gi, '')
             .replace(/tagalog dubbed|tagdub|dubbed|pinoy|tagalog/gi, '')
-            .replace(/[\(\)\[\]_\-\.]+$/, '')
+            .replace(/[\(\)\[\]_\-\.]+/g, ' ')
             .trim();
 
-          const sNum = match[1] || match[3] || match[5] || 1;
-          const eNum = match[2] || match[4] || match[6] || 1;
+          const sNum = match[1] || match[3] || 1;
+          const eNum = match[2] || match[4] || match[5] || 1;
 
           const epData = {
             id: item.id || item.node,
@@ -256,11 +256,11 @@
             rating: item.rating || '8.5'
           };
 
-          const key = seriesName.toLowerCase();
+          const key = cleanSeriesName.toLowerCase();
           if (!seriesMap.has(key)) {
             seriesMap.set(key, {
               isSeries: true,
-              title: seriesName,
+              title: cleanSeriesName || rawTitle,
               image: item.image,
               rating: item.rating || '8.5',
               year: item.year || '2024',
@@ -272,7 +272,7 @@
             seriesMap.get(key).episodes.push(epData);
           }
         } else {
-          // 🎬 KUNG WALANG S01E01 O EPISODE: 100% STANDALONE MOVIE ITO!
+          // 🎬 KUNG WALANG S01E01: 100% MOVIE ITO!
           singles.push({
             ...item,
             isSeries: false
@@ -280,15 +280,30 @@
         }
       });
 
-      // I-sort ang bawat series mula Episode 1 pataas
+      // 🌟 GOLDEN RULE: Kung 1 lang pala ang episode, ibalik bilang MOVIE na may direct PLAY button!
+      const groupedSeries = [];
       seriesMap.forEach(series => {
-        series.episodes.sort((a, b) => {
-          if (a.season === b.season) return a.episode - b.episode;
-          return a.season - b.season;
-        });
+        if (series.episodes.length > 1) {
+          // Tunay na Series dahil may 2 o higit pang episodes
+          series.episodes.sort((a, b) => a.season === b.season ? a.episode - b.episode : a.season - b.season);
+          groupedSeries.push(series);
+        } else {
+          // 1 lang ang file -> Gawin agad na MOVIE na may PLAY button!
+          const singleEp = series.episodes[0];
+          singles.push({
+            id: singleEp.id,
+            title: series.title,
+            image: series.image,
+            rating: series.rating,
+            year: series.year,
+            genre: 'MOVIE',
+            size: singleEp.size,
+            isSeries: false
+          });
+        }
       });
 
-      return [...Array.from(seriesMap.values()), ...singles];
+      return [...groupedSeries, ...singles];
     }
 
     const PROCESSED_CATALOG = processAndGroupMedia(RAW_MOVIES);
