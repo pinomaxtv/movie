@@ -358,8 +358,13 @@ tgClient.addEventHandler(async (event) => {
 
             // ✅ SMART TMDB TITLE CLEANER & DUAL SEARCH
             try {
-              // 1. Linisin ang mga kalat na tags, channel names, resolution, at underscores
-              let cleanTitle = fileName
+              // read caption kung mali title logic
+      let rawTitleToUse = (message.message && message.message.trim().length > 0 && !message.message.startsWith('/')) 
+        ? message.message.split('\n')[0].trim() 
+        : fileName;
+
+      let cleanTitle = rawTitleToUse
+      //-----------------------------------------------------//
                 .replace(/\.mp4|\.mkv|\.webm|\.avi/gi, '')
                 .replace(/@\w+/g, '') // Tanggalin ang @channel_name
                 .replace(/tagalog dubbed|tagdub|dubbed|pinoy|tagalog|full movie/gi, '')
