@@ -428,6 +428,47 @@ tgClient.addEventHandler(async (event) => {
             const downloadUrl = `${WORKER_URL}/download/${fileUniqueId}?file=${encodeURIComponent(fileName)}`;
             const embedUrl = `${WORKER_URL}/embed/${fileUniqueId}`;
             const sizeFormatted = formatBytes(fileSize);
+            
+            // 🚀 AUTO-POST DIRECT TO PHP WEBSITE (RENDER MYSQL)
+            try {
+              const PHP_AUTO_POST_URL = 'https://pinomax-tv-premium-website.onrender.com/api_auto_post.php';
+              
+              // I-detect kung Series o Movie
+              const isSeriesMatch = fileName.match(/^(.*?)(?:\s+|-|_)*(?:[sS](\d+)\s*[eE](\d+)|(?:Season|S)\s*(\d+)|(?:Episode|Ep|E)\s*(\d+))(.*)$/i);
+              const isSeries = category === 'Series' || Boolean(isSeriesMatch);
+
+              let seriesCleanName = cleanTitle;
+              let epName = 'Episode 1';
+
+              if (isSeriesMatch) {
+                seriesCleanName = (isSeriesMatch[1] || cleanTitle).trim();
+                const sNum = isSeriesMatch[2] || isSeriesMatch[4] || 1;
+                const eNum = isSeriesMatch[3] || isSeriesMatch[5] || 1;
+                epName = `Season ${sNum} Episode ${eNum}`;
+              }
+
+              await axios.post(PHP_AUTO_POST_URL, {
+                secret: "PinomaxSecret2026",
+                title: cleanTitle || fileName,
+                series_name: seriesCleanName,
+                episode_name: epName,
+                description: overview || '',
+                poster: poster || '',
+                year: year || '2024',
+                rating: rating || '7.5',
+                genre: isSeries ? 'Series, Drama' : 'Action, Adventure',
+                language: 'Tagalog Dubbed',
+                type: isSeries ? 'series' : 'movie',
+                video_url: embedUrl, // Cloudflare Stream/Embed Link
+                url_tmdb: searchRes?.data?.results?.[0]?.id 
+                  ? `https://www.themoviedb.org/${isSeries ? 'tv' : 'movie'}/${searchRes.data.results[0].id}` 
+                  : ''
+              }, { timeout: 8000 });
+
+              console.log(`✅ [AUTO-SYNC] Successfully posted "${cleanTitle}" to PHP Website!`);
+            } catch (syncErr) {
+              console.warn('⚠️ Auto-sync to PHP notice:', syncErr.message);
+            }
 
             // 👉 FORMAT NA TUGMANG-TUGMA SA SCREENSHOT 1:
             const replyHtml = 
